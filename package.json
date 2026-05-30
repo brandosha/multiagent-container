@@ -1,0 +1,21 @@
+{
+	"type": "module",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js"
+	},
+	"dependencies": {
+		"@hono/node-server": "^2.0.4",
+		"@modelcontextprotocol/server": "2.0.0-alpha.2",
+		"@openai/codex": "^0.134.0",
+		"@openai/codex-sdk": "^0.134.0",
+		"hono": "^4.12.23",
+		"ws": "^8.21.0",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"@types/ws": "^8.18.1",
+		"typescript": "^6.0.3"
+	}
+}

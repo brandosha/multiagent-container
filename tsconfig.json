@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "dist",
+    "module": "node20",
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules", "dist", "data"]
+}

@@ -1,0 +1,15 @@
+services:
+  multiagent-container:
+    build: .
+    restart: unless-stopped
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+    volumes:
+      - multiagent-container-data:/agents
+    ports:
+      - "8001:80"
+
+volumes:
+  multiagent-container-data:
