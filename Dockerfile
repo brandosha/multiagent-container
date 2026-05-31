@@ -19,15 +19,16 @@ RUN corepack enable pnpm
 
 WORKDIR /app
 
-# Copy and build the agent worker
-COPY . .
+# Install dependencies
+COPY package*.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
+
+# Copy and build the app
+COPY . .
 RUN pnpm run build
 RUN pnpm prune --prod
 
 # Set permissions for the scripts
-RUN chmod -R 700 .
-RUN chmod 755 /app/dist/agent-worker.js /app/dist/mcp.js
 RUN chmod +x /app/entrypoint.sh
 
 # Container runs as root to manage the unified volume

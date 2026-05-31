@@ -1,12 +1,24 @@
 import fs from "fs/promises";
 
 import { serve, upgradeWebSocket } from "@hono/node-server";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { Hono } from "hono";
 import { WebSocketServer } from "ws";
 
 import { threads } from "./threads.js";
 
 const app = new Hono();
+
+// Block any local server access so that untrusted agents can't access other threads or the agent manager server itself.
+app.use("*", async (c, next) => {
+  const connInfo = getConnInfo(c);
+  const remoteAddr = connInfo.remote.address;
+
+  if (["localhost", "127.0.0.1", "::1", undefined].includes(remoteAddr)) {
+    return c.text("Forbidden", 403);
+  }
+  return next();
+});
 
 app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
 
@@ -16,6 +28,8 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
   if (threadId === "new") {
     thread = threads.createThread();
   }
+
+  console.log(`Thread ${threadId}:`, thread);
   
   return {
     onOpen: async (event, ws) => {
@@ -28,7 +42,9 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
         ws.send(JSON.stringify(event));
       });
 
-      await thread.connect();
+      await thread.connect().catch((err) => {
+        console.error(err);
+      });
 
       ws.send(JSON.stringify({
         type: "thread.connected",
@@ -58,7 +74,7 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
 }));
 
 app.get("/publickey", async (c) => {
-  const publicKeyPath = "/agents/ssh/id_ed25519.pub";
+  const publicKeyPath = `${process.env.SSH_KEY_PATH}.pub`;
   const publicKey = await fs.readFile(publicKeyPath, "utf-8");
   return c.json({ key: publicKey });
 });

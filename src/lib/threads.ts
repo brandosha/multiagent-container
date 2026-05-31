@@ -10,9 +10,13 @@ import { ThreadEvent } from '@openai/codex-sdk';
 import { appDir, threadsDir, mcpSocketsDir } from './paths.js';
 import { PubSub } from './PubSub.js';
 
-export const THREADS_GID = 10000;
+export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
+if (isNaN(AGENTS_GID)) {
+  console.error("AGENTS_GID environment variable is not set or is not a valid number.");
+  process.exit(1);
+}
 
-class Thread extends PubSub<string> {
+class Thread extends PubSub<ThreadEvent> {
   id: number;
   threadDir: string;
   workspaceDir: string;
@@ -47,6 +51,8 @@ class Thread extends PubSub<string> {
         await fs.chown(threadIdFile, this._uid, this._uid);
         await fs.chmod(threadIdFile, 0o400);
       }
+
+      this.publish(message);
     });
 
     worker.send({
@@ -62,7 +68,7 @@ class Thread extends PubSub<string> {
     const workerScript = path.join(appDir, 'dist/agent-worker.js');
     return fork(workerScript, {
       uid: this._uid,
-      gid: THREADS_GID,
+      gid: AGENTS_GID,
       cwd: this.workspaceDir,
       env: {
         HOME: this.workspaceDir,
