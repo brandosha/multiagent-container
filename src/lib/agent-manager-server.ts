@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { WebSocketServer } from "ws";
 
 import { threads } from "./threads.js";
+import { codex } from "./codex.js";
 
 const app = new Hono();
 
@@ -69,6 +70,38 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
       } catch (err) {
         console.error("Error handling message:", err);
       }
+    }
+  };
+}));
+
+app.get("/codex-login", upgradeWebSocket(async (c) => {
+  return {
+    onOpen: async (event, ws) => {
+      const login = codex.login();
+      login.output.subscribe((event) => {
+        ws.send(JSON.stringify({
+          type: "codex.login.output",
+          ...event
+        }));
+      });
+
+      login.process.on("error", (err) => {
+        ws.send(JSON.stringify({
+          type: "codex.login.error",
+          message: err.message,
+        }));
+      });
+
+      login.process.on("close", (code, signal) => {
+        ws.send(JSON.stringify({
+          type: "codex.login.exit",
+          code,
+          signal,
+        }));
+      });
+    },
+    onMessage: (event, ws) => {
+      // No messages expected from client for this endpoint
     }
   };
 }));

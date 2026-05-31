@@ -14,3 +14,33 @@ export class PubSub<EventType> {
     };
   }
 }
+
+export class HistorySub<T> extends PubSub<T> {
+  history: T[] = []
+  limit?: number;
+
+  constructor(limit?: number) {
+    super();
+    this.limit = limit;
+  }
+
+  subscribe(callback: (event: T) => void, limit?: number): () => void {
+    if (limit === undefined) limit = this.limit;
+    if (limit) {
+      this.history.slice(-limit).forEach(callback);
+    } else {
+      this.history.forEach(callback);
+    }
+
+    return super.subscribe(callback)
+  }
+
+  publish(event: T): void {
+    this.history.push(event);
+    if (this.limit && this.history.length >= this.limit * 2) {
+      this.history = this.history.slice(-this.limit);
+    }
+
+    super.publish(event)
+  }
+}

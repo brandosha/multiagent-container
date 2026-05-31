@@ -30,6 +30,9 @@ chmod 775 $CODEX_HOME
 chgrp $AGENTS_GID $CODEX_HOME
 chmod g+s $CODEX_HOME
 
+touch "$CODEX_HOME/config.toml"
+chmod 660 "$CODEX_HOME/config.toml"
+
 # Start the server
 export SERVER_PORT=80
 exec pnpm run start
