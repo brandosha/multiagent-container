@@ -4,8 +4,7 @@ import path from "path";
 import { Codex, ThreadOptions } from "@openai/codex-sdk";
 import { z } from "zod";
 
-import { appDir, codexDir } from "./lib/paths.js";
-
+import { appDir } from "./lib/paths.js";
 
 if (!process.send || process.getuid!() < 10000) {
   console.error("This script may only be run as a child process.");
@@ -35,21 +34,17 @@ const codex = new Codex({
     approval_policy: 'on-request',
     approvals_reviewer: 'auto_review',
   },
-  env: {
-    ...process.env,
-    CODEX_HOME: codexDir
-  }
 });
 
 
 const threadOptions: ThreadOptions = {
   skipGitRepoCheck: true,
-  workingDirectory: process.env.HOME
+  workingDirectory: process.cwd(),
 }
 
 let thread = codex.startThread(threadOptions);
 try {
-  const threadIdFile = path.join(process.env.HOME ?? "", "../thread_id");
+  const threadIdFile = path.join(process.env.HOME ?? "", "/thread_id");
   const threadId = readFileSync(threadIdFile, "utf-8");
   thread = codex.resumeThread(threadId, threadOptions);
 } catch (error) {
@@ -81,6 +76,7 @@ class AsyncQueue<T> {
     while (this.tasks.length > 0) {
       // 2. Shift items out of the array completely, breaking memory references
       const { task, resolve, reject } = this.tasks.shift()!;
+      console.log(`Processing task. Remaining queue length: ${this.tasks.length}`);
       
       try {
         const result = await task();
@@ -92,6 +88,7 @@ class AsyncQueue<T> {
 
     // 3. Reset state cleanly once the array is empty
     this.isProcessing = false;
+    console.log("All tasks processed, queue is now empty.");
   }
 }
 
@@ -113,6 +110,7 @@ process.on('message', async (message) => {
     console.error("Received invalid message:", message);
     return;
   }
+  console.log("Received message:", parsedMessage);
 
   const abortController = await abortSignalController;
   if (parsedMessage.type === "abort") {
@@ -120,6 +118,7 @@ process.on('message', async (message) => {
   } else if (parsedMessage.type === "prompt") {
     abortController?.abort(); // Abort any existing task before starting a new one
     messageQueue.enqueue(async () => {
+      console.log("Handling prompt:", parsedMessage.message);
       const newAbortController = new AbortController();
       let resolveAbortLock: () => void = () => {};
       abortSignalController = new Promise((resolve) => {
@@ -132,7 +131,6 @@ process.on('message', async (message) => {
         });
 
         for await (const event of events) {
-          console.log("Thread event:", event);
           if (event.type === "item.completed") {
             resolveAbortLock();
           }
@@ -160,9 +158,9 @@ process.on('message', async (message) => {
             message: String(error),
           });
         }
+      } finally {
+        resolveAbortLock(); // Ensure that the abort controller is resolved to prevent blocking forever
       }
-
-      
     });
   }
 });

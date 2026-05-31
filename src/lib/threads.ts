@@ -7,8 +7,9 @@ import path from 'path';
 
 import { ThreadEvent } from '@openai/codex-sdk';
 
-import { appDir, threadsDir, mcpSocketsDir } from './paths.js';
+import { appDir, threadsDir, mcpSocketsDir, rootCodexDir } from './paths.js';
 import { PubSub } from './PubSub.js';
+import { createIcpServer } from './icp-server.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -20,6 +21,7 @@ class Thread extends PubSub<ThreadEvent> {
   id: number;
   threadDir: string;
   workspaceDir: string;
+  private codexDir: string;
   private _uid: number;
   private _mcpSocketPath: string;
   private _childProcess?: Promise<ChildProcess>;
@@ -29,6 +31,7 @@ class Thread extends PubSub<ThreadEvent> {
     this.id = id;
     this.threadDir = path.join(threadsDir, `agent-${id}`);
     this.workspaceDir = path.join(this.threadDir, "workspace");
+    this.codexDir = path.join(this.threadDir, ".codex");
 
     this._uid = 10000 + id;
     this._mcpSocketPath = path.join(mcpSocketsDir, `${crypto.randomUUID()}.sock`);
@@ -54,11 +57,6 @@ class Thread extends PubSub<ThreadEvent> {
 
       this.publish(message);
     });
-
-    worker.send({
-      type: 'init',
-      mcpSocketPath: this._mcpSocketPath
-    });
   }
 
   private async _createAgentWorker() {
@@ -71,7 +69,9 @@ class Thread extends PubSub<ThreadEvent> {
       gid: AGENTS_GID,
       cwd: this.workspaceDir,
       env: {
-        HOME: this.workspaceDir,
+        HOME: this.threadDir,
+        CODEX_HOME: this.codexDir,
+        WORKSPACE_DIR: this.workspaceDir,
         MCP_SOCKET_PATH: this._mcpSocketPath,
       },
     });
@@ -80,21 +80,29 @@ class Thread extends PubSub<ThreadEvent> {
   private async _setupWorkspace() {
     await fs.mkdir(this.workspaceDir, { recursive: true });
     await fs.chown(this.workspaceDir, this._uid, this._uid);
+
+    await fs.mkdir(this.codexDir, { recursive: true });
+    await fs.chown(this.codexDir, this._uid, this._uid);
+    
+    const rootAuthPath = path.join(rootCodexDir, "auth.json");
+    const localAuthPath = path.join(this.codexDir, "auth.json");
+    try {
+      await fs.access(localAuthPath);
+      // The file already exists in the thread's codex directory, no need to create a symlink
+      return;
+    } catch {}
+
+    try {
+      await fs.symlink(rootAuthPath, localAuthPath);
+      await fs.chown(localAuthPath, this._uid, this._uid);
+    } catch (err) {
+      console.error(`Error creating symlink for auth.json in thread ${this.id}:`, err);
+    }
   }
 
   private _setupMcpSocket() {
     return new Promise<net.Server>((resolve, reject) => {
-      const server = net.createServer((socket) => {
-        socket.on('data', (data) => {
-          const message = data.toString();
-          console.log(`Received message from thread ${this.id}: ${message}`);
-        });
-      });
-
-      server.on('error', (err) => {
-        console.error(`Error in MCP socket for thread ${this.id}:`, err);
-        reject(err);
-      });
+      const server = createIcpServer();
 
       server.listen(this._mcpSocketPath, async () => {
         await fs.chown(this._mcpSocketPath, this._uid, this._uid);

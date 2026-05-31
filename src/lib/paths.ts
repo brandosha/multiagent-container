@@ -1,6 +1,10 @@
 import path from "path";
 import { existsSync, mkdirSync } from "fs";
-import fs from "fs/promises";
+
+const { CODEX_HOME } = process.env;
+if (!CODEX_HOME) {
+  throw new Error("CODEX_HOME environment variable is not set.");
+}
 
 function getRootDir() {
   let currentDir = import.meta.dirname;
@@ -14,15 +18,12 @@ function getRootDir() {
   throw new Error("Could not find root directory containing package.json");
 }
 
-
 export const appDir = getRootDir();
 export const agentsDir = "/agents";
 export const threadsDir = path.join(agentsDir, "threads");
-export const codexDir = path.join(agentsDir, ".codex");
+export const rootCodexDir = CODEX_HOME;
 export const mcpSocketsDir = "/tmp/mcp-sockets";
 
-process.env.CODEX_HOME = codexDir;
-
-[agentsDir, threadsDir, codexDir, mcpSocketsDir].forEach(dir => {
+[agentsDir, threadsDir, rootCodexDir, mcpSocketsDir].forEach(dir => {
   mkdirSync(dir, { recursive: true });
 });

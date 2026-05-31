@@ -26,12 +26,12 @@ chmod 711 /tmp/mcp-sockets
 export AGENTS_GID=9999
 export CODEX_HOME="/agents/.codex"
 mkdir -p $CODEX_HOME
-chmod 775 $CODEX_HOME
-chgrp $AGENTS_GID $CODEX_HOME
-chmod g+s $CODEX_HOME
-
-touch "$CODEX_HOME/config.toml"
-chmod 660 "$CODEX_HOME/config.toml"
+chmod 711 $CODEX_HOME
+CODEX_AUTH="$CODEX_HOME/auth.json"
+if [ ! -f "$CODEX_AUTH" ]; then
+    echo "{}" > "$CODEX_AUTH"
+fi
+chmod 666 $CODEX_HOME/auth.json  # Allow read/write for all users, since agent workers will likely need to write to this file
 
 # Start the server
 export SERVER_PORT=80
