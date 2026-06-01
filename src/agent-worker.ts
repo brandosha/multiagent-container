@@ -21,7 +21,7 @@ delete process.env.MCP_SOCKET_PATH; // Remove from env to prevent access by chil
 const codexConfig = {
   mcp_servers: {
     'root_proxy': {
-      command: 'node',
+      command: process.execPath,
       args: [path.join(appDir, 'dist/mcp.js')],
       default_tools_approval_mode: 'approve',
       env: {

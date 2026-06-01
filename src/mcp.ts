@@ -45,14 +45,14 @@ class ManagerSocketConnection {
 
   send(message: IpcRequest["payload"]): Promise<string> {
     const id = randomStr(8);
-    const msg = JSON.stringify({
+    const req: IpcRequest = {
       id,
-      content: message,
-    });
+      payload: message,
+    };
 
     return new Promise<string>((resolve, reject) => {
       this._pendingResponses[id] = resolve;
-      this.socket.write(msg + "\n", (err) => {
+      this.socket.write(JSON.stringify(req) + "\n", (err) => {
         if (err) {
           delete this._pendingResponses[id];
           reject(err);

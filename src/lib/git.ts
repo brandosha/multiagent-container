@@ -94,34 +94,46 @@ interface CopyGitRepoParams {
 export async function copyGitRepo({ repoLocation, destination, uid, gitUsername, gitEmail }: CopyGitRepoParams) {
   const repoDir = getBareRepoDir(repoLocation);
   
-  // 1. Ensure the parent directory exists (e.g., /workspace)
-  const parentDir = path.dirname(destination);
-  await fs.mkdir(parentDir, { recursive: true });
+  // 1. Safely create the destination directory AS THE AGENT.
+  // This prevents the 'No such file or directory' error and ensures the agent owns it.
+  await execFile('mkdir', ['-p', destination], { uid, gid: uid });
   
-  // 2. We do NOT create `destination` itself with fs.mkdir, 
-  // otherwise it is owned by root and cp will fail.
-  
-  // 3. Execute the CoW copy
+  // 2. Execute the CoW copy
+  // We use `-T` to treat the destination `.git` as the explicit target,
+  // preventing accidental nesting (e.g., `.git/repoDir/`) if the tool retries.
   await execFile('cp', [
     '-r',
+    '-T',
     '--preserve=mode,timestamps',
     '--reflink=auto',
-    // We copy the bare repo (.git folder essentially) INTO a .git folder in the workspace
     repoDir, 
     path.join(destination, '.git') 
   ], {
     uid, gid: uid,
   });
 
-  // 4. (Optional but recommended) 
-  // Because we copied a bare repo, the agent needs to materialize the working tree.
-  // We can do this on their behalf safely:
-  await execFile('git', ['-c', 'core.bare=false', 'reset', '--hard', 'HEAD'], {
+  // 3. Convert the bare repo to a standard repo permanently
+  await execFile('git', ['config', 'core.bare', 'false'], {
     cwd: destination,
     uid, gid: uid
   });
 
-  // 5. Set user config for commits (if the agent will be making commits)
+  // 4. Materialize the working tree
+  // Use checkout instead of reset to gracefully handle the default branch.
+  try {
+    await execFile('git', ['checkout', '-f', 'HEAD'], {
+      cwd: destination,
+      uid, gid: uid
+    });
+  } catch (err) {
+    // If the repository is completely empty (no commits yet), HEAD doesn't exist.
+    // We can safely ignore this specific error, as the repo is valid but empty.
+    if (!String(err).includes('ambiguous argument')) {
+      throw err;
+    }
+  }
+
+  // 5. Set user config for commits
   if (gitUsername) {
     await execFile('git', ['config', 'user.name', gitUsername], {
       cwd: destination,

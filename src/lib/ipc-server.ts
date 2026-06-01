@@ -47,10 +47,10 @@ export interface ManagerIpcResponse {
   isError: boolean;
 }
 
-function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): ManagerIpcResponse {
+async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Promise<ManagerIpcResponse> {
   if (req.payload.tool === "git_clone") {
     const { repoUrl, destinationPath } = req.payload.args;
-    const absoluteDestinationPath = path.join(clientInfo.workspaceDir, destinationPath);
+    const absoluteDestinationPath = path.resolve(clientInfo.workspaceDir, destinationPath);
     if (!absoluteDestinationPath.startsWith(clientInfo.workspaceDir)) {
       return {
         id: req.id,
@@ -59,14 +59,27 @@ function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): ManagerIp
       };
     }
 
-    cloneRepo(repoUrl);
-    copyGitRepo({
-      repoLocation: repoUrl,
-      destination: absoluteDestinationPath,
-      uid: clientInfo.uid,
-      gitUsername: `agent-${clientInfo.id}`,
-    });
-    // Here you would implement the actual git clone logic, for now we just return a placeholder response
+    try {
+      await cloneRepo(repoUrl);
+      await copyGitRepo({
+        repoLocation: repoUrl,
+        destination: absoluteDestinationPath,
+        uid: clientInfo.uid,
+        gitUsername: `agent-${clientInfo.id}`,
+      });
+    } catch (err) {
+      return {
+        id: req.id,
+        text: `Error cloning repository: ${err instanceof Error ? err.message : String(err)}`,
+        isError: true,
+      };
+    }
+
+    return {
+      id: req.id,
+      text: `Repository cloned successfully to ${destinationPath}`,
+      isError: false,
+    };
   }
 
   return {
@@ -86,10 +99,10 @@ export function createIpcServer(clientInfo: IpcClientInfo): net.Server {
   return net.createServer((socket) => {
     const rl = readline.createInterface({ input: socket });
 
-    rl.on("line", (line) => {
+    rl.on("line", async (line) => {
       try {
         const message = ipcRequestSchema.parse(JSON.parse(line));
-        const response = handleIpcRequest(message, clientInfo);
+        const response = await handleIpcRequest(message, clientInfo);
         socket.write(JSON.stringify(response) + "\n");
       } catch (err) {
         console.error("Error parsing message:", err);
