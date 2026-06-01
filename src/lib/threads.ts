@@ -9,7 +9,7 @@ import { ThreadEvent } from '@openai/codex-sdk';
 
 import { appDir, threadsDir, mcpSocketsDir, rootCodexDir } from './paths.js';
 import { PubSub } from './PubSub.js';
-import { createIcpServer } from './ipc-server.js';
+import { createIpcServer } from './ipc-server.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -102,7 +102,7 @@ class Thread extends PubSub<ThreadEvent> {
 
   private _setupMcpSocket() {
     return new Promise<net.Server>((resolve, reject) => {
-      const server = createIcpServer();
+      const server = createIpcServer();
 
       server.listen(this._mcpSocketPath, async () => {
         await fs.chown(this._mcpSocketPath, this._uid, this._uid);

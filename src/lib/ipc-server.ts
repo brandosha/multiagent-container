@@ -1,7 +1,7 @@
 import net from "net";
 import readline from "readline";
 
-export function createIcpServer(): net.Server {
+export function createIpcServer(): net.Server {
   return net.createServer((socket) => {
     const rl = readline.createInterface({ input: socket });
 
