@@ -5,6 +5,7 @@
 		"start": "node dist/index.js"
 	},
 	"dependencies": {
+		"@cfworker/json-schema": "^4.1.1",
 		"@hono/node-server": "^2.0.4",
 		"@modelcontextprotocol/server": "2.0.0-alpha.2",
 		"@openai/codex": "^0.134.0",

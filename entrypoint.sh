@@ -19,8 +19,9 @@ fi
 chmod 600 "$SSH_KEY_PATH"
 
 # Set up mcp sockets directory
-mkdir -p /tmp/mcp-sockets
-chmod 711 /tmp/mcp-sockets
+export MCP_SOCKETS_DIR="/tmp/mcp-sockets"
+mkdir -p $MCP_SOCKETS_DIR
+chmod 711 $MCP_SOCKETS_DIR
 
 # setup CODEX_HOME
 export AGENTS_GID=9999

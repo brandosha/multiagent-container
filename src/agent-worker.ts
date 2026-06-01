@@ -18,22 +18,25 @@ if (!MCP_SOCKET_PATH) {
 }
 delete process.env.MCP_SOCKET_PATH; // Remove from env to prevent access by child processes
 
-const codex = new Codex({
-  config: {
-    mcp_servers: {
-      'root_proxy': {
-        command: 'node',
-        args: [path.join(appDir, 'dist/mcp.js')],
-        default_tools_approval_mode: 'approve',
-        env: {
-          MCP_SOCKET_PATH
-        }
+const codexConfig = {
+  mcp_servers: {
+    'root_proxy': {
+      command: 'node',
+      args: [path.join(appDir, 'dist/mcp.js')],
+      default_tools_approval_mode: 'approve',
+      env: {
+        MCP_SOCKET_PATH
       }
-    },
-    sandbox_mode: 'danger-full-access',
-    approval_policy: 'on-request',
-    approvals_reviewer: 'auto_review',
+    }
   },
+  sandbox_mode: 'danger-full-access',
+  approval_policy: 'on-request',
+  approvals_reviewer: 'auto_review',
+};
+console.log(JSON.stringify(codexConfig, null, 2));
+
+const codex = new Codex({
+  config: codexConfig,
 });
 
 

@@ -1,11 +1,6 @@
 import path from "path";
 import { existsSync, mkdirSync } from "fs";
 
-const { CODEX_HOME } = process.env;
-if (!CODEX_HOME) {
-  throw new Error("CODEX_HOME environment variable is not set.");
-}
-
 function getRootDir() {
   let currentDir = import.meta.dirname;
   for (let i = 0; i < 5; i++) {
@@ -21,9 +16,8 @@ function getRootDir() {
 export const appDir = getRootDir();
 export const agentsDir = "/agents";
 export const threadsDir = path.join(agentsDir, "threads");
-export const rootCodexDir = CODEX_HOME;
-export const mcpSocketsDir = "/tmp/mcp-sockets";
+export const reposDir = path.join(agentsDir, "repos");
 
-[agentsDir, threadsDir, rootCodexDir, mcpSocketsDir].forEach(dir => {
+[agentsDir, threadsDir, reposDir].forEach(dir => {
   mkdirSync(dir, { recursive: true });
 });

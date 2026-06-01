@@ -7,13 +7,23 @@ import path from 'path';
 
 import { ThreadEvent } from '@openai/codex-sdk';
 
-import { appDir, threadsDir, mcpSocketsDir, rootCodexDir } from './paths.js';
+import { appDir, threadsDir } from './paths.js';
 import { PubSub } from './PubSub.js';
 import { createIpcServer } from './ipc-server.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
   console.error("AGENTS_GID environment variable is not set or is not a valid number.");
+  process.exit(1);
+}
+
+const { CODEX_HOME, MCP_SOCKETS_DIR } = process.env;
+if (!CODEX_HOME) {
+  console.error("CODEX_HOME environment variable is not set.");
+  process.exit(1);
+}
+if (!MCP_SOCKETS_DIR) {
+  console.error("MCP_SOCKETS_DIR environment variable is not set.");
   process.exit(1);
 }
 
@@ -34,7 +44,7 @@ class Thread extends PubSub<ThreadEvent> {
     this.codexDir = path.join(this.threadDir, ".codex");
 
     this._uid = 10000 + id;
-    this._mcpSocketPath = path.join(mcpSocketsDir, `${crypto.randomUUID()}.sock`);
+    this._mcpSocketPath = path.join(MCP_SOCKETS_DIR!, `${crypto.randomUUID()}.sock`);
   }
 
   async connect() {
@@ -84,7 +94,7 @@ class Thread extends PubSub<ThreadEvent> {
     await fs.mkdir(this.codexDir, { recursive: true });
     await fs.chown(this.codexDir, this._uid, this._uid);
     
-    const rootAuthPath = path.join(rootCodexDir, "auth.json");
+    const rootAuthPath = path.join(CODEX_HOME!, "auth.json");
     const localAuthPath = path.join(this.codexDir, "auth.json");
     try {
       await fs.access(localAuthPath);
@@ -102,7 +112,11 @@ class Thread extends PubSub<ThreadEvent> {
 
   private _setupMcpSocket() {
     return new Promise<net.Server>((resolve, reject) => {
-      const server = createIpcServer();
+      const server = createIpcServer({
+        id: this.id,
+        workspaceDir: this.workspaceDir,
+        uid: this._uid,
+      });
 
       server.listen(this._mcpSocketPath, async () => {
         await fs.chown(this._mcpSocketPath, this._uid, this._uid);

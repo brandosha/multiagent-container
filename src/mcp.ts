@@ -2,9 +2,9 @@ import net from "net";
 import readline from "readline";
 
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
-import { z } from 'zod';
 
 import { randomStr } from "./lib/utils.js";
+import { gitCloneSchema, gitSshProxySchema,  IpcRequest,  ManagerIpcResponse, miseInstallSchema } from "./lib/ipc-server.js";
 
 const mcpSocketPath = process.env.MCP_SOCKET_PATH;
 
@@ -14,24 +14,6 @@ if (!mcpSocketPath) {
 }
 
 
-const gitCloneSchema = z.object({
-  repoUrl: z.string(),
-  destinationPath: z.string(),
-});
-
-const gitSshProxySchema = z.object({
-  cmd: z.string(),
-});
-
-const miseInstallSchema = z.object({
-  package: z.string(),
-});
-
-
-export interface ManagerResponse {
-  id: string;
-  m: string;
-}
 class ManagerSocketConnection {
   socket: net.Socket;
   private _pendingResponses: Record<string, (response: string) => void> = {};
@@ -43,13 +25,13 @@ class ManagerSocketConnection {
     rl.on("line", (line) => {
       try {
         const message = JSON.parse(line);
-        const { id, m: response } = message as ManagerResponse;
+        const { id, text: response } = message as ManagerIpcResponse;
         const resolver = this._pendingResponses[id];
         if (resolver) {
           resolver(response);
           delete this._pendingResponses[id];
         } else {
-          console.warn(`No pending response handler for message ID ${id}`);
+          console.error(`No pending response handler for message ID ${id}`);
         }
       } catch (err) {
         console.error("Error parsing message from socket:", err);
@@ -61,11 +43,11 @@ class ManagerSocketConnection {
     });
   }
 
-  send(message: any) {
+  send(message: IpcRequest["payload"]): Promise<string> {
     const id = randomStr(8);
     const msg = JSON.stringify({
       id,
-      m: message,
+      content: message,
     });
 
     return new Promise<string>((resolve, reject) => {
@@ -97,8 +79,7 @@ function startMcpServer() {
     try {
       const response = await conn.send({
         tool: "git_clone",
-        repoUrl: input.repoUrl,
-        destinationPath: input.destinationPath,
+        args: input,
       });
 
       return {
@@ -110,22 +91,20 @@ function startMcpServer() {
         ]
       };
     } catch (err) {
-    }
-    
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Not yet implemented.`
-        }
-      ]
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Error executing git clone: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ]
+      };
     }
   });
 
   server.registerTool("git_ssh_proxy", {
-    inputSchema: z.object({
-      cmd: z.string(),
-    }),
+    inputSchema: gitSshProxySchema,
   }, async (input, context) => {
     return {
       content: [
@@ -138,9 +117,7 @@ function startMcpServer() {
   });
 
   server.registerTool("mise_install", {
-    inputSchema: z.object({
-      package: z.string(),
-    }),
+    inputSchema: miseInstallSchema,
   }, async (input, context) => {
     return {
       content: [
@@ -155,6 +132,4 @@ function startMcpServer() {
   const transport = new StdioServerTransport();
   server.connect(transport);
 }
-
-
 
