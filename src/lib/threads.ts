@@ -9,7 +9,7 @@ import { ThreadEvent } from '@openai/codex-sdk';
 
 import { appDir, threadsDir, mcpSocketsDir, rootCodexDir } from './paths.js';
 import { PubSub } from './PubSub.js';
-import { createIcpServer } from './icp-server.js';
+import { createIcpServer } from './ipc-server.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
