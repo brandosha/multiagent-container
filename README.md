@@ -5,8 +5,11 @@
 Agent thread events are persisted in SQLite at `/agents/multiagent-container.db`.
 Schema changes are managed with Drizzle migrations in `drizzle/`, using the
 schema in `src/lib/db/schema.ts`.
-The `/thread/:threadId` websocket still streams live events. Clients can request
-stored events over the same websocket by sending:
+The `/thread/:threadId` websocket accepts arbitrary string thread IDs. On
+connection, the server maps that string ID to an auto-incrementing numeric
+thread ID, creating the mapping if it does not already exist. The websocket
+streams live events for the mapped thread. Clients can request stored events
+over the same websocket by sending:
 
 ```json
 {

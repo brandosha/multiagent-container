@@ -1,5 +1,4 @@
 import { fork, ChildProcess } from 'child_process';
-import { readdirSync } from 'fs';
 import fs from 'fs/promises';
 import net from 'net';
 import crypto from 'crypto';
@@ -10,7 +9,7 @@ import { ThreadEvent } from '@openai/codex-sdk';
 import { appDir, threadsDir } from './paths.js';
 import { PubSub } from './PubSub.js';
 import { createIpcServer } from './ipc-server.js';
-import { ensureThread, getThreadEvents, recordThreadEvent, setCodexThreadId } from './database.js';
+import { getOrCreateThread, getThreadEvents, recordThreadEvent, setCodexThreadId, ThreadRecord } from './database.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -30,6 +29,7 @@ if (!MCP_SOCKETS_DIR) {
 
 class Thread extends PubSub<ThreadEvent> {
   id: number;
+  stringId: string;
   threadDir: string;
   workspaceDir: string;
   private codexDir: string;
@@ -37,16 +37,16 @@ class Thread extends PubSub<ThreadEvent> {
   private _mcpSocketPath: string;
   private _childProcess?: Promise<ChildProcess>;
 
-  constructor(id: number) {
+  constructor(record: ThreadRecord) {
     super();
-    this.id = id;
-    this.threadDir = path.join(threadsDir, `agent-${id}`);
+    this.id = record.id;
+    this.stringId = record.stringId;
+    this.threadDir = path.join(threadsDir, `agent-${this.id}`);
     this.workspaceDir = path.join(this.threadDir, "workspace");
     this.codexDir = path.join(this.threadDir, ".codex");
 
-    this._uid = 10000 + id;
+    this._uid = 10000 + this.id;
     this._mcpSocketPath = path.join(MCP_SOCKETS_DIR!, `${crypto.randomUUID()}.sock`);
-    ensureThread(this.id);
   }
 
   async connect() {
@@ -161,33 +161,18 @@ class Thread extends PubSub<ThreadEvent> {
 }
 
 class Threads {
-  private _agents: (Thread | null)[];
+  private _threadsByStringId = new Map<string, Thread>();
 
-  constructor() {
-    this._agents = [];
-    const existingAgents = readdirSync(threadsDir, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory() && dirent.name.startsWith('agent-'))
-      .map(dirent => parseInt(dirent.name.split('-')[1], 10))
-      .filter(id => !isNaN(id))
-      .sort((a, b) => a - b);
-
-    for (const id of existingAgents) {
-      while (this._agents.length < id) {
-        this._agents.push(null);
-      }
-      this._agents.push(new Thread(id));
+  getOrCreateThread(stringId: string) {
+    const cachedThread = this._threadsByStringId.get(stringId);
+    if (cachedThread) {
+      return cachedThread;
     }
-  }
 
-  createThread() {
-    const id = this._agents.length;
-    const thread = new Thread(id);
-    this._agents.push(thread);
+    const record = getOrCreateThread(stringId);
+    const thread = new Thread(record);
+    this._threadsByStringId.set(stringId, thread);
     return thread;
-  }
-
-  getThread(id: number) {
-    return this._agents[id];
   }
 }
 

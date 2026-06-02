@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f22ac72d-0ab3-418a-a2ed-810b02a57a08",
+  "id": "464d5636-efc0-4360-aecc-dee71e5f4f1f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "thread_events": {
@@ -80,6 +80,13 @@
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
+          "autoincrement": true
+        },
+        "string_id": {
+          "name": "string_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "codex_thread_id": {
@@ -104,7 +111,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "threads_string_id_idx": {
+          "name": "threads_string_id_idx",
+          "columns": [
+            "string_id"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

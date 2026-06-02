@@ -1,12 +1,15 @@
 import type { ThreadEvent } from "@openai/codex-sdk";
-import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const threadsTable = sqliteTable("threads", {
-  id: int("id").primaryKey(),
+  id: int("id").primaryKey({ autoIncrement: true }),
+  stringId: text("string_id").notNull(),
   codexThreadId: text("codex_thread_id"),
   createdAt: text("created_at").notNull().$default(() => new Date().toISOString()),
   updatedAt: text("updated_at").notNull().$default(() => new Date().toISOString()),
-});
+}, (table) => [
+  uniqueIndex("threads_string_id_idx").on(table.stringId),
+]);
 
 export const threadEventsTable = sqliteTable("thread_events", {
   id: int("id").primaryKey({ autoIncrement: true }),

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS `thread_events` (
+CREATE TABLE `thread_events` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`thread_id` integer NOT NULL,
 	`type` text NOT NULL,
@@ -7,10 +7,13 @@ CREATE TABLE IF NOT EXISTS `thread_events` (
 	FOREIGN KEY (`thread_id`) REFERENCES `threads`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `thread_events_thread_id_id_idx` ON `thread_events` (`thread_id`,`id`);--> statement-breakpoint
-CREATE TABLE IF NOT EXISTS `threads` (
-	`id` integer PRIMARY KEY NOT NULL,
+CREATE INDEX `thread_events_thread_id_id_idx` ON `thread_events` (`thread_id`,`id`);--> statement-breakpoint
+CREATE TABLE `threads` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`string_id` text NOT NULL,
 	`codex_thread_id` text,
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX `threads_string_id_idx` ON `threads` (`string_id`);

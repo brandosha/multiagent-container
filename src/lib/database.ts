@@ -23,6 +23,12 @@ export interface StoredThreadEvent {
   event: ThreadEvent;
 }
 
+export interface ThreadRecord {
+  id: number;
+  stringId: string;
+  codexThreadId: string | null;
+}
+
 interface StoredThreadEventRow {
   id: number;
   threadId: number;
@@ -31,23 +37,38 @@ interface StoredThreadEventRow {
   event: ThreadEvent;
 }
 
-export function ensureThread(id: number) {
+export function getThreadByStringId(stringId: string): ThreadRecord | undefined {
+  return db.select({
+    id: threadsTable.id,
+    stringId: threadsTable.stringId,
+    codexThreadId: threadsTable.codexThreadId,
+  })
+    .from(threadsTable)
+    .where(eq(threadsTable.stringId, stringId))
+    .get();
+}
+
+export function getOrCreateThread(stringId: string): ThreadRecord {
   const now = new Date().toISOString();
-  db.insert(threadsTable)
+  return db.insert(threadsTable)
     .values({
-      id,
+      stringId,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: threadsTable.id,
+      target: threadsTable.stringId,
       set: { updatedAt: now },
     })
-    .run();
+    .returning({
+      id: threadsTable.id,
+      stringId: threadsTable.stringId,
+      codexThreadId: threadsTable.codexThreadId,
+    })
+    .get();
 }
 
 export function setCodexThreadId(id: number, codexThreadId: string) {
-  ensureThread(id);
   db.update(threadsTable)
     .set({
       codexThreadId,
@@ -58,7 +79,6 @@ export function setCodexThreadId(id: number, codexThreadId: string) {
 }
 
 export function recordThreadEvent(threadId: number, event: ThreadEvent) {
-  ensureThread(threadId);
   db.insert(threadEventsTable)
     .values({
       threadId,
@@ -70,7 +90,6 @@ export function recordThreadEvent(threadId: number, event: ThreadEvent) {
 }
 
 export function getThreadEvents(threadId: number, options: { limit?: number; offset?: number } = {}): StoredThreadEvent[] {
-  ensureThread(threadId);
   const limit = Math.max(1, Math.min(options.limit ?? 100, 500));
   const offset = Math.max(0, options.offset ?? 0);
   const rows = db.select({

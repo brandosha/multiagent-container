@@ -23,23 +23,14 @@ app.use("*", async (c, next) => {
 
 app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
 
-  const threadId = c.req.param("threadId");
-  let thread = threads.getThread(parseInt(threadId ?? ""));
-
-  if (threadId === "new") {
-    thread = threads.createThread();
-  }
+  const threadId = c.req.param("threadId") ?? "";
+  const thread = threads.getOrCreateThread(threadId);
 
   console.log(`Thread ${threadId}:`, thread);
   let unsubscribe = () => {};
   
   return {
     onOpen: async (event, ws) => {
-      if (!thread) {
-        ws.close(1008, "Invalid thread ID");
-        return;
-      }
-      
       unsubscribe = thread.subscribe((event) => {
         ws.send(JSON.stringify(event));
       });
@@ -54,11 +45,6 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
       }));
     },
     onMessage: (event, ws) => {
-      if (!thread) {
-        ws.close(1008, "Invalid thread ID");
-        return;
-      }
-
       try {
         const data = JSON.parse(event.data.toString());
         if (data.type === "abort") {
