@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "464d5636-efc0-4360-aecc-dee71e5f4f1f",
+  "id": "d7e62858-1698-42b7-9293-3349d99dc474",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "thread_events": {
@@ -19,6 +19,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "turn_id": {
+          "name": "turn_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "type": {
@@ -49,6 +56,14 @@
           "columns": [
             "thread_id",
             "id"
+          ],
+          "isUnique": false
+        },
+        "thread_events_thread_id_type_idx": {
+          "name": "thread_events_thread_id_type_idx",
+          "columns": [
+            "thread_id",
+            "type"
           ],
           "isUnique": false
         }

@@ -103,6 +103,7 @@ const messageSchema = z.object({
 }).or(z.object({
   type: z.literal("prompt"),
   message: z.string(),
+  turnId: z.string(),
 }));
 
 process.on('message', async (message) => {
@@ -138,27 +139,37 @@ process.on('message', async (message) => {
             resolveAbortLock();
           }
 
-          process.send!(event);
+          process.send!({
+            ...event,
+            turnId: parsedMessage.turnId,
+          });
         }
       } catch (error: any) {
         if (error.name === "AbortError") {
           console.log("Thread execution aborted.");
           process.send!({
             type: "turn.abort",
+            turnId: parsedMessage.turnId,
           });
         } else if (error instanceof Error) {
           console.error("Error during thread execution:", error);
           process.send!({
             type: "turn.error",
-            name: error.name,
-            message: error.message,
+            turnId: parsedMessage.turnId,
+            error: {
+              name: error.name,
+              message: error.message,
+            },
           });
         } else {
           console.error("Unknown error during thread execution:", error);
           process.send!({
             type: "turn.error",
-            name: "UnknownError",
-            message: String(error),
+            turnId: parsedMessage.turnId,
+            error: {
+              name: "UnknownError",
+              message: String(error),
+            },
           });
         }
       } finally {

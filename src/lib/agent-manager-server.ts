@@ -48,10 +48,31 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
       try {
         const data = JSON.parse(event.data.toString());
         if (data.type === "abort") {
-          thread.abort();
+          if (typeof data.from !== "string" || !data.from) {
+            ws.send(JSON.stringify({
+              type: "request.error",
+              message: "abort requests require a non-empty from field",
+            }));
+            return;
+          }
+          thread.abort(data.from);
           return;
         } else if (data.type === "prompt") {
-          thread.prompt(data.message);
+          if (typeof data.message !== "string") {
+            ws.send(JSON.stringify({
+              type: "request.error",
+              message: "prompt requests require a string message field",
+            }));
+            return;
+          }
+          if (typeof data.from !== "string" || !data.from) {
+            ws.send(JSON.stringify({
+              type: "request.error",
+              message: "prompt requests require a non-empty from field",
+            }));
+            return;
+          }
+          thread.prompt(data.message, data.from);
           return;
         } else if (data.type === "events.get") {
           const limit = Number.isInteger(data.limit) ? Math.max(1, Math.min(data.limit, 500)) : undefined;

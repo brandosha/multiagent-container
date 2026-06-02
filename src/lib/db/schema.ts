@@ -1,5 +1,6 @@
-import type { ThreadEvent } from "@openai/codex-sdk";
 import { index, int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+import type { SharedThreadEvent } from "../thread-events.js";
 
 export const threadsTable = sqliteTable("threads", {
   id: int("id").primaryKey({ autoIncrement: true }),
@@ -14,9 +15,11 @@ export const threadsTable = sqliteTable("threads", {
 export const threadEventsTable = sqliteTable("thread_events", {
   id: int("id").primaryKey({ autoIncrement: true }),
   threadId: int("thread_id").notNull().references(() => threadsTable.id),
+  turnId: text("turn_id"),
   type: text("type").notNull(),
-  event: text("event_json", { mode: "json" }).$type<ThreadEvent>().notNull(),
+  event: text("event_json", { mode: "json" }).$type<SharedThreadEvent>().notNull(),
   timestamp: text("timestamp").notNull().$default(() => new Date().toISOString()),
 }, (table) => [
   index("thread_events_thread_id_id_idx").on(table.threadId, table.id),
+  index("thread_events_thread_id_type_idx").on(table.threadId, table.type),
 ]);

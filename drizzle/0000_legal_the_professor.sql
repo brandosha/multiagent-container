@@ -1,6 +1,7 @@
 CREATE TABLE `thread_events` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`thread_id` integer NOT NULL,
+	`turn_id` text,
 	`type` text NOT NULL,
 	`event_json` text NOT NULL,
 	`timestamp` text NOT NULL,
@@ -8,6 +9,7 @@ CREATE TABLE `thread_events` (
 );
 --> statement-breakpoint
 CREATE INDEX `thread_events_thread_id_id_idx` ON `thread_events` (`thread_id`,`id`);--> statement-breakpoint
+CREATE INDEX `thread_events_thread_id_type_idx` ON `thread_events` (`thread_id`,`type`);--> statement-breakpoint
 CREATE TABLE `threads` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`string_id` text NOT NULL,

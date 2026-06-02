@@ -11,6 +11,23 @@ thread ID, creating the mapping if it does not already exist. The websocket
 streams live events for the mapped thread. Clients can request stored events
 over the same websocket by sending:
 
+Prompt and abort requests must include `from` attribution:
+
+```json
+{
+	"type": "prompt",
+	"from": "trello-agent",
+	"message": "Summarize the workspace."
+}
+```
+
+```json
+{
+	"type": "abort",
+	"from": "trello-agent"
+}
+```
+
 ```json
 {
 	"type": "events.get",
