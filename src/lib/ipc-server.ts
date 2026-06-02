@@ -41,11 +41,13 @@ const ipcRequestSchema = z.object({
 
 export type IpcRequest = z.infer<typeof ipcRequestSchema>;
 
-export interface ManagerIpcResponse {
-  id: string;
-  text: string;
-  isError: boolean;
-}
+export const managerIpcResponseSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  isError: z.boolean(),
+});
+
+export type ManagerIpcResponse = z.infer<typeof managerIpcResponseSchema>;
 
 async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Promise<ManagerIpcResponse> {
   if (req.payload.tool === "git_clone") {

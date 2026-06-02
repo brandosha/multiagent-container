@@ -4,7 +4,7 @@ import readline from "readline";
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 
 import { randomStr } from "./lib/utils.js";
-import { gitCloneSchema, gitSshProxySchema,  IpcRequest,  ManagerIpcResponse, miseInstallSchema } from "./lib/ipc-server.js";
+import { gitCloneSchema, gitSshProxySchema,  IpcRequest, managerIpcResponseSchema, miseInstallSchema } from "./lib/ipc-server.js";
 
 const mcpSocketPath = process.env.MCP_SOCKET_PATH;
 
@@ -24,8 +24,7 @@ class ManagerSocketConnection {
     const rl = readline.createInterface({ input: socket });
     rl.on("line", (line) => {
       try {
-        const message = JSON.parse(line);
-        const { id, text: response } = message as ManagerIpcResponse;
+        const { id, text: response } = managerIpcResponseSchema.parse(JSON.parse(line));
         const resolver = this._pendingResponses[id];
         if (resolver) {
           resolver(response);
@@ -132,4 +131,3 @@ function startMcpServer() {
   const transport = new StdioServerTransport();
   server.connect(transport);
 }
-

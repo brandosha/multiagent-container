@@ -4,11 +4,29 @@ import { serve, upgradeWebSocket } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { Hono } from "hono";
 import { WebSocketServer } from "ws";
+import { z } from "zod";
 
 import { threads } from "./threads.js";
 import { codex } from "./codex.js";
 
 const app = new Hono();
+
+const websocketRequestSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("abort"),
+    from: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("prompt"),
+    from: z.string().min(1),
+    message: z.string(),
+  }),
+  z.object({
+    type: z.literal("events.get"),
+    limit: z.number().int().min(1).max(500).optional(),
+    offset: z.number().int().min(0).optional(),
+  }),
+]);
 
 // Block any local server access so that untrusted agents can't access other threads or the agent manager server itself.
 app.use("*", async (c, next) => {
@@ -46,37 +64,25 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
     },
     onMessage: (event, ws) => {
       try {
-        const data = JSON.parse(event.data.toString());
+        const parsedRequest = websocketRequestSchema.safeParse(JSON.parse(event.data.toString()));
+        if (!parsedRequest.success) {
+          ws.send(JSON.stringify({
+            type: "request.error",
+            message: "Invalid websocket request",
+            issues: parsedRequest.error.issues,
+          }));
+          return;
+        }
+
+        const data = parsedRequest.data;
         if (data.type === "abort") {
-          if (typeof data.from !== "string" || !data.from) {
-            ws.send(JSON.stringify({
-              type: "request.error",
-              message: "abort requests require a non-empty from field",
-            }));
-            return;
-          }
           thread.abort(data.from);
           return;
         } else if (data.type === "prompt") {
-          if (typeof data.message !== "string") {
-            ws.send(JSON.stringify({
-              type: "request.error",
-              message: "prompt requests require a string message field",
-            }));
-            return;
-          }
-          if (typeof data.from !== "string" || !data.from) {
-            ws.send(JSON.stringify({
-              type: "request.error",
-              message: "prompt requests require a non-empty from field",
-            }));
-            return;
-          }
           thread.prompt(data.message, data.from);
           return;
         } else if (data.type === "events.get") {
-          const limit = Number.isInteger(data.limit) ? Math.max(1, Math.min(data.limit, 500)) : undefined;
-          const offset = Number.isInteger(data.offset) ? Math.max(0, data.offset) : undefined;
+          const { limit, offset } = data;
           ws.send(JSON.stringify({
             type: "thread.events",
             threadId: thread.id,
