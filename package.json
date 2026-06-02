@@ -10,13 +10,20 @@
 		"@modelcontextprotocol/server": "2.0.0-alpha.2",
 		"@openai/codex": "^0.134.0",
 		"@openai/codex-sdk": "^0.134.0",
+		"better-sqlite3": "^12.10.0",
 		"hono": "^4.12.23",
 		"ws": "^8.21.0",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^25.9.1",
 		"@types/ws": "^8.18.1",
 		"typescript": "^6.0.3"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"better-sqlite3"
+		]
 	}
 }

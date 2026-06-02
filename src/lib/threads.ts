@@ -10,6 +10,7 @@ import { ThreadEvent } from '@openai/codex-sdk';
 import { appDir, threadsDir } from './paths.js';
 import { PubSub } from './PubSub.js';
 import { createIpcServer } from './ipc-server.js';
+import { ensureThread, getThreadEvents, recordThreadEvent, setCodexThreadId } from './database.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -45,6 +46,7 @@ class Thread extends PubSub<ThreadEvent> {
 
     this._uid = 10000 + id;
     this._mcpSocketPath = path.join(MCP_SOCKETS_DIR!, `${crypto.randomUUID()}.sock`);
+    ensureThread(this.id);
   }
 
   async connect() {
@@ -57,12 +59,14 @@ class Thread extends PubSub<ThreadEvent> {
 
     worker.on('message', async (message: ThreadEvent) => {
       console.log(`Received message from thread ${this.id}:`, message);
+      recordThreadEvent(this.id, message);
 
       if (message.type === "thread.started") {
         const threadIdFile = path.join(this.threadDir, "thread_id");
         await fs.writeFile(threadIdFile, message.thread_id);
         await fs.chown(threadIdFile, this._uid, this._uid);
         await fs.chmod(threadIdFile, 0o400);
+        setCodexThreadId(this.id, message.thread_id);
       }
 
       this.publish(message);
@@ -94,6 +98,12 @@ class Thread extends PubSub<ThreadEvent> {
 
     await fs.mkdir(this.codexDir, { recursive: true });
     await fs.chown(this.codexDir, this._uid, this._uid);
+
+    const threadIdFile = path.join(this.threadDir, "thread_id");
+    try {
+      const existingThreadId = await fs.readFile(threadIdFile, "utf-8");
+      setCodexThreadId(this.id, existingThreadId.trim());
+    } catch {}
     
     const rootAuthPath = path.join(CODEX_HOME!, "auth.json");
     const localAuthPath = path.join(this.codexDir, "auth.json");
@@ -143,6 +153,10 @@ class Thread extends PubSub<ThreadEvent> {
     }
 
     worker.send({ type: 'prompt', message });
+  }
+
+  getEvents(options?: { limit?: number; offset?: number }) {
+    return getThreadEvents(this.id, options);
   }
 }
 

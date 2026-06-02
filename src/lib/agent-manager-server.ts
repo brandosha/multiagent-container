@@ -31,6 +31,7 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
   }
 
   console.log(`Thread ${threadId}:`, thread);
+  let unsubscribe = () => {};
   
   return {
     onOpen: async (event, ws) => {
@@ -39,7 +40,7 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
         return;
       }
       
-      thread.subscribe((event) => {
+      unsubscribe = thread.subscribe((event) => {
         ws.send(JSON.stringify(event));
       });
 
@@ -66,10 +67,24 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
         } else if (data.type === "prompt") {
           thread.prompt(data.message);
           return;
+        } else if (data.type === "events.get") {
+          const limit = Number.isInteger(data.limit) ? Math.max(1, Math.min(data.limit, 500)) : undefined;
+          const offset = Number.isInteger(data.offset) ? Math.max(0, data.offset) : undefined;
+          ws.send(JSON.stringify({
+            type: "thread.events",
+            threadId: thread.id,
+            limit,
+            offset,
+            events: thread.getEvents({ limit, offset }),
+          }));
+          return;
         }
       } catch (err) {
         console.error("Error handling message:", err);
       }
+    },
+    onClose: () => {
+      unsubscribe();
     }
   };
 }));
