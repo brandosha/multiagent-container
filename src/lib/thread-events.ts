@@ -1,13 +1,5 @@
 import type { Input, ThreadEvent, TurnOptions } from "@openai/codex-sdk";
 
-export interface PromptQueuedEvent {
-  type: "input.prompt.queued";
-  turnId: string;
-  from: string;
-  prompt: Input;
-  options: TurnOptions;
-}
-
 export interface PromptEvent {
   type: "input.prompt";
   turnId: string;
@@ -37,7 +29,6 @@ export interface TurnErrorEvent {
 
 export type SharedThreadEvent = (
   (ThreadEvent & { turnId: string }) |
-  PromptQueuedEvent |
   PromptEvent |
   AbortEvent |
   TurnAbortEvent |

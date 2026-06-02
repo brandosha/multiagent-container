@@ -177,13 +177,6 @@ class Thread extends PubSub<SharedThreadEvent> {
     const options: TurnOptions = {};
 
     this.recordAndPublish({
-      type: "input.prompt.queued",
-      turnId,
-      from,
-      prompt,
-      options,
-    });
-    this.recordAndPublish({
       type: "input.prompt",
       turnId,
       from,
