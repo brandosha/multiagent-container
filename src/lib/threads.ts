@@ -1,15 +1,18 @@
 import { fork, ChildProcess } from 'child_process';
-import { readdirSync } from 'fs';
 import fs from 'fs/promises';
 import net from 'net';
 import crypto from 'crypto';
 import path from 'path';
 
-import { ThreadEvent } from '@openai/codex-sdk';
+import { Input, TurnOptions } from '@openai/codex-sdk';
 
 import { appDir, threadsDir } from './paths.js';
 import { PubSub } from './PubSub.js';
 import { createIpcServer } from './ipc-server.js';
+import { getOrCreateThread, getThreadEvents, recordThreadEvent, setCodexThreadId, ThreadRecord } from './database.js';
+import { randomStr } from './utils.js';
+import { SharedThreadEvent } from './thread-events.js';
+import { defaultThreadConfig, redactThreadConfig, ThreadConfig } from './thread-config.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -27,23 +30,29 @@ if (!MCP_SOCKETS_DIR) {
   process.exit(1);
 }
 
-class Thread extends PubSub<ThreadEvent> {
+type WithoutRecordFields<T> = T extends unknown ? Omit<T, "id" | "timestamp"> : never;
+type UnrecordedSharedThreadEvent = WithoutRecordFields<SharedThreadEvent>;
+
+class Thread extends PubSub<SharedThreadEvent> {
   id: number;
+  stringId: string;
   threadDir: string;
   workspaceDir: string;
   private codexDir: string;
   private _uid: number;
   private _mcpSocketPath: string;
   private _childProcess?: Promise<ChildProcess>;
+  private _config: ThreadConfig = defaultThreadConfig();
 
-  constructor(id: number) {
+  constructor(record: ThreadRecord) {
     super();
-    this.id = id;
-    this.threadDir = path.join(threadsDir, `agent-${id}`);
+    this.id = record.id;
+    this.stringId = record.stringId;
+    this.threadDir = path.join(threadsDir, `agent-${this.id}`);
     this.workspaceDir = path.join(this.threadDir, "workspace");
     this.codexDir = path.join(this.threadDir, ".codex");
 
-    this._uid = 10000 + id;
+    this._uid = 10000 + this.id;
     this._mcpSocketPath = path.join(MCP_SOCKETS_DIR!, `${crypto.randomUUID()}.sock`);
   }
 
@@ -55,18 +64,30 @@ class Thread extends PubSub<ThreadEvent> {
     this._childProcess = this._createAgentWorker();
     const worker = await this._childProcess;
 
-    worker.on('message', async (message: ThreadEvent) => {
+    worker.on('message', async (message: UnrecordedSharedThreadEvent) => {
       console.log(`Received message from thread ${this.id}:`, message);
+      const event = this.recordAndPublish(message);
 
-      if (message.type === "thread.started") {
+      if (event.type === "thread.started") {
         const threadIdFile = path.join(this.threadDir, "thread_id");
-        await fs.writeFile(threadIdFile, message.thread_id);
+        await fs.writeFile(threadIdFile, event.thread_id);
         await fs.chown(threadIdFile, this._uid, this._uid);
         await fs.chmod(threadIdFile, 0o400);
+        setCodexThreadId(this.id, event.thread_id);
       }
-
-      this.publish(message);
     });
+  }
+
+  private recordAndPublish(event: UnrecordedSharedThreadEvent) {
+    const sharedEvent = {
+      ...event,
+      id: randomStr(5),
+      timestamp: new Date(),
+    } as SharedThreadEvent;
+
+    recordThreadEvent(this.id, sharedEvent);
+    this.publish(sharedEvent);
+    return sharedEvent;
   }
 
   private async _createAgentWorker() {
@@ -94,6 +115,12 @@ class Thread extends PubSub<ThreadEvent> {
 
     await fs.mkdir(this.codexDir, { recursive: true });
     await fs.chown(this.codexDir, this._uid, this._uid);
+
+    const threadIdFile = path.join(this.threadDir, "thread_id");
+    try {
+      const existingThreadId = await fs.readFile(threadIdFile, "utf-8");
+      setCodexThreadId(this.id, existingThreadId.trim());
+    } catch {}
     
     const rootAuthPath = path.join(CODEX_HOME!, "auth.json");
     const localAuthPath = path.join(this.codexDir, "auth.json");
@@ -117,6 +144,7 @@ class Thread extends PubSub<ThreadEvent> {
         id: this.id,
         workspaceDir: this.workspaceDir,
         uid: this._uid,
+        getConfig: () => this._config,
       });
 
       server.listen(this._mcpSocketPath, async () => {
@@ -127,7 +155,12 @@ class Thread extends PubSub<ThreadEvent> {
     });
   }
 
-  async abort() {
+  async abort(from: string) {
+    this.recordAndPublish({
+      type: "input.abort",
+      from,
+    });
+
     const worker = await this._childProcess;
     if (!worker) {
       throw new Error(`Thread ${this.id} is not connected.`);
@@ -136,44 +169,58 @@ class Thread extends PubSub<ThreadEvent> {
     worker.send({ type: 'abort' });
   }
 
-  async prompt(message: string) {
+  async updateConfig(config: ThreadConfig, from: string) {
+    this._config = config;
+    this.recordAndPublish({
+      type: "thread.config.updated",
+      from,
+      config: redactThreadConfig(config),
+    });
+
+    const worker = await this._childProcess;
+    worker?.send({ type: "config", config });
+  }
+
+  async prompt(message: string, from: string) {
     const worker = await this._childProcess;
     if (!worker) {
       throw new Error(`Thread ${this.id} is not connected.`);
     }
 
-    worker.send({ type: 'prompt', message });
+    const turnId = randomStr(5);
+    const prompt: Input = message;
+    const options: TurnOptions = {};
+
+    this.recordAndPublish({
+      type: "input.prompt",
+      turnId,
+      from,
+      prompt,
+      options,
+    });
+
+    worker.send({ type: 'config', config: this._config });
+    worker.send({ type: 'prompt', message, turnId });
+  }
+
+  getEvents(options?: { limit?: number; offset?: number }) {
+    return getThreadEvents(this.id, options);
   }
 }
 
 class Threads {
-  private _agents: (Thread | null)[];
+  private _threadsByStringId = new Map<string, Thread>();
 
-  constructor() {
-    this._agents = [];
-    const existingAgents = readdirSync(threadsDir, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory() && dirent.name.startsWith('agent-'))
-      .map(dirent => parseInt(dirent.name.split('-')[1], 10))
-      .filter(id => !isNaN(id))
-      .sort((a, b) => a - b);
-
-    for (const id of existingAgents) {
-      while (this._agents.length < id) {
-        this._agents.push(null);
-      }
-      this._agents.push(new Thread(id));
+  getOrCreateThread(stringId: string) {
+    const cachedThread = this._threadsByStringId.get(stringId);
+    if (cachedThread) {
+      return cachedThread;
     }
-  }
 
-  createThread() {
-    const id = this._agents.length;
-    const thread = new Thread(id);
-    this._agents.push(thread);
+    const record = getOrCreateThread(stringId);
+    const thread = new Thread(record);
+    this._threadsByStringId.set(stringId, thread);
     return thread;
-  }
-
-  getThread(id: number) {
-    return this._agents[id];
   }
 }
 

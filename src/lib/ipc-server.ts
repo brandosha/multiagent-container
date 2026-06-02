@@ -4,6 +4,7 @@ import readline from "readline";
 
 import { z } from "zod";
 import { cloneRepo, copyGitRepo } from "./git.js";
+import type { ThreadConfig } from "./thread-config.js";
 
 export const gitCloneSchema = z.object({
   repoUrl: z.string(),
@@ -41,11 +42,13 @@ const ipcRequestSchema = z.object({
 
 export type IpcRequest = z.infer<typeof ipcRequestSchema>;
 
-export interface ManagerIpcResponse {
-  id: string;
-  text: string;
-  isError: boolean;
-}
+export const managerIpcResponseSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  isError: z.boolean(),
+});
+
+export type ManagerIpcResponse = z.infer<typeof managerIpcResponseSchema>;
 
 async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Promise<ManagerIpcResponse> {
   if (req.payload.tool === "git_clone") {
@@ -93,6 +96,7 @@ export interface IpcClientInfo {
   id: number;
   workspaceDir: string;
   uid: number;
+  getConfig: () => ThreadConfig;
 }
 
 export function createIpcServer(clientInfo: IpcClientInfo): net.Server {

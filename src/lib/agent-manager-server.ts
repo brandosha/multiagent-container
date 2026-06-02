@@ -4,11 +4,35 @@ import { serve, upgradeWebSocket } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { Hono } from "hono";
 import { WebSocketServer } from "ws";
+import { z } from "zod";
 
 import { threads } from "./threads.js";
 import { codex } from "./codex.js";
+import { threadConfigSchema } from "./thread-config.js";
 
 const app = new Hono();
+
+const websocketRequestSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("abort"),
+    from: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("prompt"),
+    from: z.string().min(1),
+    message: z.string(),
+  }),
+  z.object({
+    type: z.literal("config"),
+    from: z.string().min(1),
+    config: threadConfigSchema,
+  }),
+  z.object({
+    type: z.literal("events.get"),
+    limit: z.number().int().min(1).max(500).optional(),
+    offset: z.number().int().min(0).optional(),
+  }),
+]);
 
 // Block any local server access so that untrusted agents can't access other threads or the agent manager server itself.
 app.use("*", async (c, next) => {
@@ -23,23 +47,15 @@ app.use("*", async (c, next) => {
 
 app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
 
-  const threadId = c.req.param("threadId");
-  let thread = threads.getThread(parseInt(threadId ?? ""));
-
-  if (threadId === "new") {
-    thread = threads.createThread();
-  }
+  const threadId = c.req.param("threadId") ?? "";
+  const thread = threads.getOrCreateThread(threadId);
 
   console.log(`Thread ${threadId}:`, thread);
+  let unsubscribe = () => {};
   
   return {
     onOpen: async (event, ws) => {
-      if (!thread) {
-        ws.close(1008, "Invalid thread ID");
-        return;
-      }
-      
-      thread.subscribe((event) => {
+      unsubscribe = thread.subscribe((event) => {
         ws.send(JSON.stringify(event));
       });
 
@@ -53,23 +69,44 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
       }));
     },
     onMessage: (event, ws) => {
-      if (!thread) {
-        ws.close(1008, "Invalid thread ID");
-        return;
-      }
-
       try {
-        const data = JSON.parse(event.data.toString());
+        const parsedRequest = websocketRequestSchema.safeParse(JSON.parse(event.data.toString()));
+        if (!parsedRequest.success) {
+          ws.send(JSON.stringify({
+            type: "request.error",
+            message: "Invalid websocket request",
+            issues: parsedRequest.error.issues,
+          }));
+          return;
+        }
+
+        const data = parsedRequest.data;
         if (data.type === "abort") {
-          thread.abort();
+          thread.abort(data.from);
           return;
         } else if (data.type === "prompt") {
-          thread.prompt(data.message);
+          thread.prompt(data.message, data.from);
+          return;
+        } else if (data.type === "config") {
+          thread.updateConfig(data.config, data.from);
+          return;
+        } else if (data.type === "events.get") {
+          const { limit, offset } = data;
+          ws.send(JSON.stringify({
+            type: "thread.events",
+            threadId: thread.id,
+            limit,
+            offset,
+            events: thread.getEvents({ limit, offset }),
+          }));
           return;
         }
       } catch (err) {
         console.error("Error handling message:", err);
       }
+    },
+    onClose: () => {
+      unsubscribe();
     }
   };
 }));
