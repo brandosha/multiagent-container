@@ -41,6 +41,10 @@ function createThread(config: ThreadConfig) {
   return codex.startThread(threadOptions);
 }
 
+function withPromptAttribution(message: string, from: string) {
+  return `[${from}]\n${message}`;
+}
+
 type AsyncTask<T> = {
   task: () => Promise<T>;
   resolve: (value: T) => void;
@@ -93,6 +97,7 @@ const messageSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("prompt"),
+    from: z.string(),
     message: z.string(),
     turnId: z.string(),
   }),
@@ -128,7 +133,7 @@ process.on("message", async (message) => {
 
       try {
         const thread = createThread(latestConfig);
-        const { events } = await thread.runStreamed(parsedMessage.message, {
+        const { events } = await thread.runStreamed(withPromptAttribution(parsedMessage.message, parsedMessage.from), {
           signal: newAbortController.signal,
         });
 

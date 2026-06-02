@@ -200,7 +200,7 @@ class Thread extends PubSub<SharedThreadEvent> {
     });
 
     worker.send({ type: 'config', config: this._config });
-    worker.send({ type: 'prompt', message, turnId });
+    worker.send({ type: 'prompt', from, message, turnId });
   }
 
   getEvents(options?: { limit?: number; offset?: number }) {
