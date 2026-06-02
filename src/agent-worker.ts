@@ -42,7 +42,7 @@ function createThread(config: ThreadConfig) {
 }
 
 function withPromptAttribution(message: string, from: string) {
-  return `[trello-agent/${from}]\n${message}`;
+  return `[${from}]\n${message}`;
 }
 
 type AsyncTask<T> = {
