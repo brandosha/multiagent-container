@@ -6,7 +6,6 @@ services:
       - SETUID
       - SETGID
       - CHOWN
-      - NET_ADMIN
     volumes:
       - multiagent-container-data:/agents
     ports:
