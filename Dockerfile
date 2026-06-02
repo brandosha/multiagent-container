@@ -20,7 +20,7 @@ RUN corepack enable pnpm
 WORKDIR /app
 
 # Install dependencies
-COPY package*.json pnpm-lock.yaml ./
+COPY package*.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Copy and build the app
