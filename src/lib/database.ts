@@ -1,59 +1,19 @@
 import Database from "better-sqlite3";
 import { ThreadEvent } from "@openai/codex-sdk";
+import { asc, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
 
-import { agentsDir } from "./paths.js";
+import { agentsDir, appDir } from "./paths.js";
+import { threadEventsTable, threadsTable } from "./db/schema.js";
 
 const dbPath = path.join(agentsDir, "multiagent-container.db");
-const db = new Database(dbPath);
+const sqlite = new Database(dbPath);
+sqlite.pragma("journal_mode = WAL");
 
-db.pragma("journal_mode = WAL");
-db.exec(`
-  CREATE TABLE IF NOT EXISTS threads (
-    id INTEGER PRIMARY KEY,
-    codex_thread_id TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS thread_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    thread_id INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    event_json TEXT NOT NULL,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (thread_id) REFERENCES threads(id)
-  );
-
-  CREATE INDEX IF NOT EXISTS thread_events_thread_id_id_idx
-    ON thread_events(thread_id, id);
-`);
-
-const ensureThreadStatement = db.prepare(`
-  INSERT INTO threads (id)
-  VALUES (@id)
-  ON CONFLICT(id) DO UPDATE SET updated_at = datetime('now')
-`);
-
-const setCodexThreadIdStatement = db.prepare(`
-  UPDATE threads
-  SET codex_thread_id = @codexThreadId,
-      updated_at = datetime('now')
-  WHERE id = @id
-`);
-
-const recordEventStatement = db.prepare(`
-  INSERT INTO thread_events (thread_id, type, event_json)
-  VALUES (@threadId, @type, @eventJson)
-`);
-
-const getEventsStatement = db.prepare(`
-  SELECT id, thread_id AS threadId, type, event_json AS eventJson, timestamp
-  FROM thread_events
-  WHERE thread_id = @threadId
-  ORDER BY id ASC
-  LIMIT @limit OFFSET @offset
-`);
+export const db = drizzle(sqlite);
+migrate(db, { migrationsFolder: path.join(appDir, "drizzle") });
 
 export interface StoredThreadEvent {
   id: number;
@@ -68,38 +28,70 @@ interface StoredThreadEventRow {
   threadId: number;
   type: string;
   timestamp: string;
-  eventJson: string;
+  event: ThreadEvent;
 }
 
 export function ensureThread(id: number) {
-  ensureThreadStatement.run({ id });
+  const now = new Date().toISOString();
+  db.insert(threadsTable)
+    .values({
+      id,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: threadsTable.id,
+      set: { updatedAt: now },
+    })
+    .run();
 }
 
 export function setCodexThreadId(id: number, codexThreadId: string) {
   ensureThread(id);
-  setCodexThreadIdStatement.run({ id, codexThreadId });
+  db.update(threadsTable)
+    .set({
+      codexThreadId,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(threadsTable.id, id))
+    .run();
 }
 
 export function recordThreadEvent(threadId: number, event: ThreadEvent) {
   ensureThread(threadId);
-  recordEventStatement.run({
-    threadId,
-    type: event.type,
-    eventJson: JSON.stringify(event),
-  });
+  db.insert(threadEventsTable)
+    .values({
+      threadId,
+      type: event.type,
+      event,
+      timestamp: new Date().toISOString(),
+    })
+    .run();
 }
 
 export function getThreadEvents(threadId: number, options: { limit?: number; offset?: number } = {}): StoredThreadEvent[] {
   ensureThread(threadId);
   const limit = Math.max(1, Math.min(options.limit ?? 100, 500));
   const offset = Math.max(0, options.offset ?? 0);
-  const rows = getEventsStatement.all({ threadId, limit, offset }) as StoredThreadEventRow[];
+  const rows = db.select({
+    id: threadEventsTable.id,
+    threadId: threadEventsTable.threadId,
+    type: threadEventsTable.type,
+    timestamp: threadEventsTable.timestamp,
+    event: threadEventsTable.event,
+  })
+    .from(threadEventsTable)
+    .where(eq(threadEventsTable.threadId, threadId))
+    .orderBy(asc(threadEventsTable.id))
+    .limit(limit)
+    .offset(offset)
+    .all() as StoredThreadEventRow[];
 
   return rows.map((row) => ({
     id: row.id,
     threadId: row.threadId,
     type: row.type,
     timestamp: row.timestamp,
-    event: JSON.parse(row.eventJson) as ThreadEvent,
+    event: row.event,
   }));
 }
