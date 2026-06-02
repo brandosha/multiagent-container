@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { threads } from "./threads.js";
 import { codex } from "./codex.js";
+import { threadConfigSchema } from "./thread-config.js";
 
 const app = new Hono();
 
@@ -20,6 +21,11 @@ const websocketRequestSchema = z.discriminatedUnion("type", [
     type: z.literal("prompt"),
     from: z.string().min(1),
     message: z.string(),
+  }),
+  z.object({
+    type: z.literal("config"),
+    from: z.string().min(1),
+    config: threadConfigSchema,
   }),
   z.object({
     type: z.literal("events.get"),
@@ -80,6 +86,9 @@ app.get("/thread/:threadId", upgradeWebSocket(async (c) => {
           return;
         } else if (data.type === "prompt") {
           thread.prompt(data.message, data.from);
+          return;
+        } else if (data.type === "config") {
+          thread.updateConfig(data.config, data.from);
           return;
         } else if (data.type === "events.get") {
           const { limit, offset } = data;

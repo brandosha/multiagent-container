@@ -12,6 +12,7 @@ import { createIpcServer } from './ipc-server.js';
 import { getOrCreateThread, getThreadEvents, recordThreadEvent, setCodexThreadId, ThreadRecord } from './database.js';
 import { randomStr } from './utils.js';
 import { SharedThreadEvent } from './thread-events.js';
+import { defaultThreadConfig, redactThreadConfig, ThreadConfig } from './thread-config.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -41,6 +42,7 @@ class Thread extends PubSub<SharedThreadEvent> {
   private _uid: number;
   private _mcpSocketPath: string;
   private _childProcess?: Promise<ChildProcess>;
+  private _config: ThreadConfig = defaultThreadConfig();
 
   constructor(record: ThreadRecord) {
     super();
@@ -142,6 +144,7 @@ class Thread extends PubSub<SharedThreadEvent> {
         id: this.id,
         workspaceDir: this.workspaceDir,
         uid: this._uid,
+        getConfig: () => this._config,
       });
 
       server.listen(this._mcpSocketPath, async () => {
@@ -166,6 +169,18 @@ class Thread extends PubSub<SharedThreadEvent> {
     worker.send({ type: 'abort' });
   }
 
+  async updateConfig(config: ThreadConfig, from: string) {
+    this._config = config;
+    this.recordAndPublish({
+      type: "thread.config.updated",
+      from,
+      config: redactThreadConfig(config),
+    });
+
+    const worker = await this._childProcess;
+    worker?.send({ type: "config", config });
+  }
+
   async prompt(message: string, from: string) {
     const worker = await this._childProcess;
     if (!worker) {
@@ -184,6 +199,7 @@ class Thread extends PubSub<SharedThreadEvent> {
       options,
     });
 
+    worker.send({ type: 'config', config: this._config });
     worker.send({ type: 'prompt', message, turnId });
   }
 

@@ -4,6 +4,7 @@ import readline from "readline";
 
 import { z } from "zod";
 import { cloneRepo, copyGitRepo } from "./git.js";
+import type { ThreadConfig } from "./thread-config.js";
 
 export const gitCloneSchema = z.object({
   repoUrl: z.string(),
@@ -95,6 +96,7 @@ export interface IpcClientInfo {
   id: number;
   workspaceDir: string;
   uid: number;
+  getConfig: () => ThreadConfig;
 }
 
 export function createIpcServer(clientInfo: IpcClientInfo): net.Server {
