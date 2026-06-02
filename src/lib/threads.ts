@@ -79,6 +79,7 @@ class Thread extends PubSub<ThreadEvent> {
       gid: AGENTS_GID,
       cwd: this.workspaceDir,
       env: {
+        PATH: process.env.PATH,
         HOME: this.threadDir,
         CODEX_HOME: this.codexDir,
         WORKSPACE_DIR: this.workspaceDir,
