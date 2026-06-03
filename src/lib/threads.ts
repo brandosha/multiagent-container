@@ -141,7 +141,8 @@ class Thread extends PubSub<SharedThreadEvent> {
   private _setupMcpSocket() {
     return new Promise<net.Server>((resolve, reject) => {
       const server = createIpcServer({
-        id: this.id,
+        id: this.stringId,
+        homeDir: this.threadDir,
         workspaceDir: this.workspaceDir,
         uid: this._uid,
         getConfig: () => this._config,

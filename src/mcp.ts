@@ -72,6 +72,8 @@ function startMcpServer() {
   });
 
   server.registerTool("git_clone", {
+    title: "Git Clone",
+    description: "Clones a git repository to a specified destination. Prefer using this tool over executing git clone directly, as it handles authentication (over ssh) and uses a cache to speed up subsequent clones of the same repository.",
     inputSchema: gitCloneSchema,
   }, async (input, context) => {
 
@@ -105,26 +107,60 @@ function startMcpServer() {
   server.registerTool("git_ssh_proxy", {
     inputSchema: gitSshProxySchema,
   }, async (input, context) => {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Not yet implemented.`
-        }
-      ]
+    try {
+      const response = await conn.send({
+        tool: "git_ssh_proxy",
+        args: input,
+      });
+      
+      return {
+        content: [
+          {
+            type: "text",
+            text: response,
+          },
+        ]
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Error executing git ssh proxy: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ]
+      };
     }
   });
 
   server.registerTool("mise_install", {
     inputSchema: miseInstallSchema,
   }, async (input, context) => {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Not yet implemented.`
-        }
-      ]
+    try {
+      const response = await conn.send({
+        tool: "mise_install",
+        args: input,
+      });
+      
+      return {
+        content: [
+          {
+            type: "text",
+            text: response,
+          },
+        ]
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Error executing mise install: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ]
+      };
     }
   });
 

@@ -4,7 +4,7 @@ import path from "path";
 import { reposDir } from "./paths.js";
 import { execFile } from "./utils.js";
 
-const gitHeadlessEnvVars = {
+const safeGitEnv = {
   GIT_TERMINAL_PROMPT: "0",
   GIT_ASKPASS: "echo",
   GIT_SSH_COMMAND: `ssh -i ${process.env.SSH_KEY_PATH} -o BatchMode=yes -o StrictHostKeyChecking=no`,
@@ -61,7 +61,7 @@ export async function cloneRepo(repoLocation: string) {
       '--prune'                     // Clean up deleted remote branches
     ], {
       cwd: repoDir,
-      env: gitHeadlessEnvVars
+      env: safeGitEnv
     });
     return;
     
@@ -79,7 +79,7 @@ export async function cloneRepo(repoLocation: string) {
     repoLocation,
     repoDir
   ], {
-    env: gitHeadlessEnvVars,
+    env: safeGitEnv,
   });
 }
 
@@ -87,11 +87,9 @@ interface CopyGitRepoParams {
   repoLocation: string;
   destination: string; // The agent's workspace path
   uid: number;
-  gitUsername: string;
-  gitEmail?: string;
 }
 
-export async function copyGitRepo({ repoLocation, destination, uid, gitUsername, gitEmail }: CopyGitRepoParams) {
+export async function copyGitRepo({ repoLocation, destination, uid }: CopyGitRepoParams) {
   const repoDir = getBareRepoDir(repoLocation);
   
   // 1. Safely create the destination directory AS THE AGENT.
@@ -132,18 +130,46 @@ export async function copyGitRepo({ repoLocation, destination, uid, gitUsername,
       throw err;
     }
   }
+}
 
-  // 5. Set user config for commits
-  if (gitUsername) {
-    await execFile('git', ['config', 'user.name', gitUsername], {
-      cwd: destination,
-      uid, gid: uid
-    });
+interface GitUserParams {
+  userHome: string;
+  uid: number;
+  gitUsername: string;
+  gitEmail: string;
+}
+export async function setGitUser({ userHome, uid, gitUsername, gitEmail }: GitUserParams) {
+  const execOptions = {
+    cwd: userHome,
+    env: {
+      HOME: userHome,
+    },
+    uid,
+    gid: uid
+  };
+
+  await execFile('git', ['config', '--global', 'user.name', gitUsername], execOptions);
+  await execFile('git', ['config', '--global', 'user.email', gitEmail], execOptions);
+}
+
+interface GitRemoteCommandParams {
+  uid: number;
+  action: "ls-remote" | "fetch" | "pull" | "push";
+  remote: string;
+  branch?: string;
+  cwd: string;
+}
+
+export async function runGitRemoteCommand({ uid, action, remote, branch, cwd }: GitRemoteCommandParams) {
+  const args = [action, remote];
+  if (branch) {
+    args.push(branch);
   }
-  if (gitEmail) {
-    await execFile('git', ['config', 'user.email', gitEmail], {
-      cwd: destination,
-      uid, gid: uid
-    });
-  }
+  return await execFile('git', [...safeGitArgs, ...args], {
+    cwd,
+    env: {
+      ...safeGitEnv,
+      SUDO_UID: uid.toString(), // Avoid "dubious ownership" git error
+    },
+  });
 }

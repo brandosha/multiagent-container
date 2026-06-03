@@ -3,7 +3,7 @@ import path from "path";
 import readline from "readline";
 
 import { z } from "zod";
-import { cloneRepo, copyGitRepo } from "./git.js";
+import { cloneRepo, copyGitRepo, runGitRemoteCommand, setGitUser } from "./git.js";
 import type { ThreadConfig } from "./thread-config.js";
 
 export const gitCloneSchema = z.object({
@@ -68,7 +68,12 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
         repoLocation: repoUrl,
         destination: absoluteDestinationPath,
         uid: clientInfo.uid,
-        gitUsername: `agent-${clientInfo.id}`,
+      });
+      await setGitUser({
+        userHome: clientInfo.workspaceDir,
+        uid: clientInfo.uid,
+        gitUsername: `Agent`,
+        gitEmail: `${clientInfo.id}@agents.internal`,
       });
     } catch (err) {
       return {
@@ -83,17 +88,56 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
       text: `Repository cloned successfully to ${destinationPath}`,
       isError: false,
     };
+  } else if (req.payload.tool === "git_ssh_proxy") {
+    const { cwd } = req.payload.args;
+    const absoluteCwd = path.resolve(clientInfo.workspaceDir, cwd);
+    if (!absoluteCwd.startsWith(clientInfo.workspaceDir)) {
+      return {
+        id: req.id,
+        text: `Invalid cwd path: ${cwd}`,
+        isError: true,
+      };
+    }
+
+    try {
+      const result = await runGitRemoteCommand({
+        ...req.payload.args,
+        uid: clientInfo.uid,
+        cwd: absoluteCwd,
+      });
+
+      return {
+        id: req.id,
+        text: `${result.stdout}${result.stderr ? "\n\nstderr:\n" + result.stderr : ""}`,
+        isError: false,
+      }
+    } catch (err) {
+      return {
+        id: req.id,
+        text: `Error executing git command: ${err instanceof Error ? err.message : String(err)}`,
+        isError: true,
+      };
+    }
+
+  } else if (req.payload.tool === "mise_install") {
+    return {
+      id: req.id,
+      text: `Mise installation not implemented yet`,
+      isError: true,
+    };
   }
 
   return {
     id: req.id,
-    text: `Received request for tool ${req.payload.tool} with args ${JSON.stringify(req.payload.args)}`,
+    // @ts-ignore - `never` type is causing errors here but we need this fallback
+    text: `Received request for unknown tool ${req.payload.tool} with args ${JSON.stringify(req.payload.args)}`,
     isError: true, // For now, just return an error since we haven't implemented the tools yet
   }
 }
 
 export interface IpcClientInfo {
-  id: number;
+  id: string;
+  homeDir: string;
   workspaceDir: string;
   uid: number;
   getConfig: () => ThreadConfig;
