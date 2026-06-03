@@ -110,6 +110,9 @@ class Thread extends PubSub<SharedThreadEvent> {
   }
 
   private async _setupWorkspace() {
+    await fs.mkdir(this.threadDir, { recursive: true });
+    await fs.chown(this.threadDir, this._uid, this._uid);
+
     await fs.mkdir(this.workspaceDir, { recursive: true });
     await fs.chown(this.workspaceDir, this._uid, this._uid);
 

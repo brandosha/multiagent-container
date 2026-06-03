@@ -17,11 +17,11 @@ export function gitUsername(config: ThreadConfig) {
 }
 
 export function pushTargetBranch(refspec: string) {
-  if (refspec.startsWith("+")) {
-    throw new GitPolicyError(`Force pushes are prohibited: refspec ${refspec} starts with '+'.`);
+  if (refspec.includes("+")) {
+    throw new GitPolicyError(`Force pushes are prohibited: refspec ${refspec} contains '+'.`);
   }
 
-  const [, target = refspec] = refspec.split(":", 2);
+  const target = refspec.split(":", 2)[1] ?? refspec;
   const normalizedTarget = normalizeBranchName(target);
   if (!normalizedTarget) {
     throw new GitPolicyError(`Unable to determine push target branch from refspec ${refspec}.`);

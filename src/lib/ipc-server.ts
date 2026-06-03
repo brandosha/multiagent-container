@@ -14,7 +14,7 @@ export const gitCloneSchema = z.object({
 
 export const gitSshProxySchema = z.object({
   cwd: z.string(),
-  action: z.enum(["ls-remote", "fetch", "pull", "push"]),
+  action: z.enum(["ls-remote", "fetch", "push"]),
   remote: z.string(),
   branch: z.string().optional(),
 });
