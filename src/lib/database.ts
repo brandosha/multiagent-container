@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
@@ -77,15 +77,17 @@ export function recordThreadEvent(threadId: number, event: SharedThreadEvent) {
 export function getThreadEvents(threadId: number, options: { limit?: number; offset?: number } = {}): SharedThreadEvent[] {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 500));
   const offset = Math.max(0, options.offset ?? 0);
+  // Offset is from the newest end so initial load returns the latest events.
   const rows = db.select({
     event: threadEventsTable.event,
   })
     .from(threadEventsTable)
     .where(eq(threadEventsTable.threadId, threadId))
-    .orderBy(asc(threadEventsTable.id))
+    .orderBy(desc(threadEventsTable.id))
     .limit(limit)
     .offset(offset)
     .all() as { event: SharedThreadEvent }[];
 
-  return rows.map((row) => row.event);
+  // Return events oldest -> newest within the page.
+  return rows.map((row) => row.event).reverse();
 }
