@@ -28,9 +28,10 @@ Prompt and abort requests must include `from` attribution:
 }
 ```
 
-Clients can update the latest per-thread Codex configuration with a `config`
-message. The `config.codex` object follows the public `CodexOptions` shape that
-can be passed to `new Codex(...)`. Git configuration is not part of this schema.
+Clients can update the latest per-thread configuration with a `config` message.
+The optional `config.codex` object follows the public `CodexOptions` shape that
+can be passed to `new Codex(...)`. The optional `config.git` object controls
+root-proxy git behavior for the thread.
 
 ```json
 {
@@ -49,10 +50,23 @@ can be passed to `new Codex(...)`. Git configuration is not part of this schema.
 					}
 				}
 			}
+		},
+		"git": {
+			"username": "Agent",
+			"branches": {
+				"allow": ["feature/my-task"],
+				"block": ["main"]
+			}
 		}
 	}
 }
 ```
+
+`git.username` sets the agent user's global git `user.name` before root-proxy
+git operations. `git.branches.allow` is an allow-list for push target branches;
+when it exists, every pushed branch must be listed. If `allow` is omitted,
+`git.branches.block` is used as a block-list. Force-push refspecs beginning
+with `+` are always rejected.
 
 The server records accepted config updates as `thread.config.updated` events.
 Recorded config events preserve keys for traceability but redact values for

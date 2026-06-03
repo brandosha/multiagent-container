@@ -4,6 +4,7 @@ import readline from "readline";
 
 import { z } from "zod";
 import { cloneRepo, copyGitRepo, runGitRemoteCommand, setGitUser } from "./git.js";
+import { assertPushAllowed, gitUsername, GitPolicyError } from "./git-policy.js";
 import type { ThreadConfig } from "./thread-config.js";
 
 export const gitCloneSchema = z.object({
@@ -50,6 +51,15 @@ export const managerIpcResponseSchema = z.object({
 
 export type ManagerIpcResponse = z.infer<typeof managerIpcResponseSchema>;
 
+async function applyGitUser(clientInfo: IpcClientInfo) {
+  await setGitUser({
+    userHome: clientInfo.homeDir,
+    uid: clientInfo.uid,
+    gitUsername: gitUsername(clientInfo.getConfig()),
+    gitEmail: `${clientInfo.id}@agents.internal`,
+  });
+}
+
 async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Promise<ManagerIpcResponse> {
   if (req.payload.tool === "git_clone") {
     const { repoUrl, destinationPath } = req.payload.args;
@@ -69,12 +79,7 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
         destination: absoluteDestinationPath,
         uid: clientInfo.uid,
       });
-      await setGitUser({
-        userHome: clientInfo.workspaceDir,
-        uid: clientInfo.uid,
-        gitUsername: `Agent`,
-        gitEmail: `${clientInfo.id}@agents.internal`,
-      });
+      await applyGitUser(clientInfo);
     } catch (err) {
       return {
         id: req.id,
@@ -100,6 +105,11 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
     }
 
     try {
+      await applyGitUser(clientInfo);
+      if (req.payload.args.action === "push") {
+        assertPushAllowed(clientInfo.getConfig(), req.payload.args.branch);
+      }
+
       const result = await runGitRemoteCommand({
         ...req.payload.args,
         uid: clientInfo.uid,
@@ -114,7 +124,7 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
     } catch (err) {
       return {
         id: req.id,
-        text: `Error executing git command: ${err instanceof Error ? err.message : String(err)}`,
+        text: `${err instanceof GitPolicyError ? "Git policy blocked command" : "Error executing git command"}: ${err instanceof Error ? err.message : String(err)}`,
         isError: true,
       };
     }
