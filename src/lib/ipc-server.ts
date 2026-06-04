@@ -6,6 +6,7 @@ import { z } from "zod";
 import { cloneRepo, copyGitRepo, runGitRemoteCommand, setGitUser } from "./git.js";
 import { assertPushAllowed, gitUsername, GitPolicyError } from "./git-policy.js";
 import type { ThreadConfig } from "./thread-config.js";
+import { internalEmail } from "./threads.js";
 
 export const gitCloneSchema = z.object({
   repoUrl: z.string(),
@@ -51,15 +52,6 @@ export const managerIpcResponseSchema = z.object({
 
 export type ManagerIpcResponse = z.infer<typeof managerIpcResponseSchema>;
 
-async function applyGitUser(clientInfo: IpcClientInfo) {
-  await setGitUser({
-    userHome: clientInfo.homeDir,
-    uid: clientInfo.uid,
-    gitUsername: gitUsername(clientInfo.getConfig()),
-    gitEmail: `${clientInfo.id}@agents.internal`,
-  });
-}
-
 async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Promise<ManagerIpcResponse> {
   if (req.payload.tool === "git_clone") {
     const { repoUrl, destinationPath } = req.payload.args;
@@ -79,7 +71,12 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
         destination: absoluteDestinationPath,
         uid: clientInfo.uid,
       });
-      await applyGitUser(clientInfo);
+      await setGitUser({   
+        userHome: clientInfo.homeDir,
+        uid: clientInfo.uid,
+        gitUsername: gitUsername(clientInfo.getConfig()),
+        gitEmail: internalEmail(clientInfo.id),
+      });   
     } catch (err) {
       return {
         id: req.id,
@@ -105,7 +102,6 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
     }
 
     try {
-      await applyGitUser(clientInfo);
       if (req.payload.args.action === "push") {
         assertPushAllowed(clientInfo.getConfig(), req.payload.args.branch);
       }
