@@ -13,7 +13,7 @@ import { getOrCreateThread, getThreadEvents, recordThreadEvent, setCodexThreadId
 import { randomStr } from './utils.js';
 import { SharedThreadEvent } from './thread-events.js';
 import { defaultThreadConfig, redactThreadConfig, ThreadConfig } from './thread-config.js';
-import { setGitUser } from './git.js';
+import { internalEmail, setGitUser } from './git.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -66,7 +66,6 @@ class Thread extends PubSub<SharedThreadEvent> {
     const worker = await this._childProcess;
 
     worker.on('message', async (message: UnrecordedSharedThreadEvent) => {
-      console.log(`Received message from thread ${this.id}:`, message);
       const event = this.recordAndPublish(message);
 
       if (event.type === "thread.started") {
@@ -225,10 +224,6 @@ class Thread extends PubSub<SharedThreadEvent> {
   getEvents(options?: { limit?: number; offset?: number }) {
     return getThreadEvents(this.id, options);
   }
-}
-
-export function internalEmail(stringId: string) {
-  return `${stringId}@agents.internal`;
 }
 
 class Threads {

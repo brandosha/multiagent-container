@@ -111,7 +111,6 @@ process.on("message", async (message) => {
     console.error("Received invalid message:", message);
     return;
   }
-  console.log("Received message:", parsedMessage);
 
   if (parsedMessage.type === "config") {
     latestConfig = parsedMessage.config;
@@ -124,7 +123,6 @@ process.on("message", async (message) => {
   } else if (parsedMessage.type === "prompt") {
     abortController?.abort(); // Abort any existing task before starting a new one.
     messageQueue.enqueue(async () => {
-      console.log("Handling prompt:", parsedMessage.message);
       const newAbortController = new AbortController();
       let resolveAbortLock: () => void = () => {};
       abortSignalController = new Promise((resolve) => {

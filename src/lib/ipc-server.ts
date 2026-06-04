@@ -3,10 +3,9 @@ import path from "path";
 import readline from "readline";
 
 import { z } from "zod";
-import { cloneRepo, copyGitRepo, runGitRemoteCommand, setGitUser } from "./git.js";
+import { cloneRepo, copyGitRepo, internalEmail, runGitRemoteCommand, setGitUser } from "./git.js";
 import { assertPushAllowed, gitUsername, GitPolicyError } from "./git-policy.js";
 import type { ThreadConfig } from "./thread-config.js";
-import { internalEmail } from "./threads.js";
 
 export const gitCloneSchema = z.object({
   repoUrl: z.string(),
@@ -150,6 +149,7 @@ export interface IpcClientInfo {
 }
 
 export function createIpcServer(clientInfo: IpcClientInfo): net.Server {
+  console.log("Creating IPC server with client info:", clientInfo);
   return net.createServer((socket) => {
     const rl = readline.createInterface({ input: socket });
 

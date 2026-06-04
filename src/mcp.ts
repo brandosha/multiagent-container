@@ -4,7 +4,7 @@ import readline from "readline";
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 
 import { randomStr } from "./lib/utils.js";
-import { gitCloneSchema, gitSshProxySchema,  IpcRequest, managerIpcResponseSchema, miseInstallSchema } from "./lib/ipc-server.js";
+import { gitCloneSchema, gitSshProxySchema, IpcRequest, managerIpcResponseSchema, miseInstallSchema } from "./lib/ipc-server.js";
 
 const mcpSocketPath = process.env.MCP_SOCKET_PATH;
 
@@ -61,7 +61,7 @@ class ManagerSocketConnection {
   }
 }
 
-const sock = net.connect(mcpSocketPath, startMcpServer);
+const sock = net.connect(mcpSocketPath);
 const conn = new ManagerSocketConnection(sock);
 
 function startMcpServer() {
@@ -105,6 +105,8 @@ function startMcpServer() {
   });
 
   server.registerTool("git_ssh_proxy", {
+    title: "Git SSH Proxy",
+    description: "This tool must be used to execute any git command that requires SSH authentication.",
     inputSchema: gitSshProxySchema,
   }, async (input, context) => {
     try {
@@ -112,7 +114,7 @@ function startMcpServer() {
         tool: "git_ssh_proxy",
         args: input,
       });
-      
+
       return {
         content: [
           {
@@ -135,6 +137,8 @@ function startMcpServer() {
   });
 
   server.registerTool("mise_install", {
+    title: "Mise Install",
+    description: "Installs a package using the Mise package manager.",
     inputSchema: miseInstallSchema,
   }, async (input, context) => {
     try {
@@ -142,7 +146,7 @@ function startMcpServer() {
         tool: "mise_install",
         args: input,
       });
-      
+
       return {
         content: [
           {
@@ -167,3 +171,6 @@ function startMcpServer() {
   const transport = new StdioServerTransport();
   server.connect(transport);
 }
+
+
+startMcpServer();

@@ -152,6 +152,10 @@ export async function setGitUser({ userHome, uid, gitUsername, gitEmail }: GitUs
   await execFile('git', ['config', '--global', 'user.email', gitEmail], execOptions);
 }
 
+export function internalEmail(stringId: string) {
+  return `${stringId}@agents.internal`;
+}
+
 interface GitRemoteCommandParams {
   uid: number;
   action: "ls-remote" | "fetch" | "push";
