@@ -4,7 +4,9 @@ import readline from "readline";
 
 import { z } from "zod";
 import { cloneRepo, copyGitRepo, runGitRemoteCommand, setGitUser } from "./git.js";
+import { assertPushAllowed, gitUsername, GitPolicyError } from "./git-policy.js";
 import type { ThreadConfig } from "./thread-config.js";
+import { internalEmail } from "./threads.js";
 
 export const gitCloneSchema = z.object({
   repoUrl: z.string(),
@@ -13,7 +15,7 @@ export const gitCloneSchema = z.object({
 
 export const gitSshProxySchema = z.object({
   cwd: z.string(),
-  action: z.enum(["ls-remote", "fetch", "pull", "push"]),
+  action: z.enum(["ls-remote", "fetch", "push"]),
   remote: z.string(),
   branch: z.string().optional(),
 });
@@ -69,12 +71,12 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
         destination: absoluteDestinationPath,
         uid: clientInfo.uid,
       });
-      await setGitUser({
-        userHome: clientInfo.workspaceDir,
+      await setGitUser({   
+        userHome: clientInfo.homeDir,
         uid: clientInfo.uid,
-        gitUsername: `Agent`,
-        gitEmail: `${clientInfo.id}@agents.internal`,
-      });
+        gitUsername: gitUsername(clientInfo.getConfig()),
+        gitEmail: internalEmail(clientInfo.id),
+      });   
     } catch (err) {
       return {
         id: req.id,
@@ -100,6 +102,10 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
     }
 
     try {
+      if (req.payload.args.action === "push") {
+        assertPushAllowed(clientInfo.getConfig(), req.payload.args.branch);
+      }
+
       const result = await runGitRemoteCommand({
         ...req.payload.args,
         uid: clientInfo.uid,
@@ -114,7 +120,7 @@ async function handleIpcRequest(req: IpcRequest, clientInfo: IpcClientInfo): Pro
     } catch (err) {
       return {
         id: req.id,
-        text: `Error executing git command: ${err instanceof Error ? err.message : String(err)}`,
+        text: `${err instanceof GitPolicyError ? "Git policy blocked command" : "Error executing git command"}: ${err instanceof Error ? err.message : String(err)}`,
         isError: true,
       };
     }

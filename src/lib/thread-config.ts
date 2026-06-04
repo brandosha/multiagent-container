@@ -6,8 +6,16 @@ import { z } from "zod";
 import { appDir } from "./paths.js";
 
 export type CodexConfigValue = string | number | boolean | CodexConfigValue[] | { [key: string]: CodexConfigValue };
+export type GitConfig = {
+  username?: string;
+  branches?: {
+    allow?: string[];
+    block?: string[];
+  };
+};
 export type ThreadConfig = {
-  codex: CodexOptions;
+  codex?: CodexOptions;
+  git?: GitConfig;
 };
 
 const codexConfigValueSchema: z.ZodType<CodexConfigValue> = z.lazy(() => z.union([
@@ -26,8 +34,17 @@ export const codexOptionsSchema = z.object({
   env: z.record(z.string(), z.string()).optional(),
 }).strict() satisfies z.ZodType<CodexOptions>;
 
+export const gitConfigSchema = z.object({
+  username: z.string().min(1).optional(),
+  branches: z.object({
+    allow: z.array(z.string().min(1)).optional(),
+    block: z.array(z.string().min(1)).optional(),
+  }).strict().optional(),
+}).strict() satisfies z.ZodType<GitConfig>;
+
 export const threadConfigSchema = z.object({
-  codex: codexOptionsSchema,
+  codex: codexOptionsSchema.optional(),
+  git: gitConfigSchema.optional(),
 }).strict() satisfies z.ZodType<ThreadConfig>;
 
 const ROOT_PROXY_MCP_SERVER = "root_proxy";
@@ -115,7 +132,7 @@ export function mergeCodexOptions(userOptions: CodexOptions, internalOptions: Co
 }
 
 export function mergeThreadCodexOptions(config: ThreadConfig, mcpSocketPath: string): CodexOptions {
-  return mergeCodexOptions(config.codex, buildInternalCodexOptions(mcpSocketPath));
+  return mergeCodexOptions(config.codex ?? {}, buildInternalCodexOptions(mcpSocketPath));
 }
 
 export function redactThreadConfig(config: ThreadConfig): ThreadConfig {
@@ -123,7 +140,5 @@ export function redactThreadConfig(config: ThreadConfig): ThreadConfig {
 }
 
 export function defaultThreadConfig(): ThreadConfig {
-  return {
-    codex: {},
-  };
+  return {};
 }

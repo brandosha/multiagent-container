@@ -61,7 +61,7 @@ export async function cloneRepo(repoLocation: string) {
       '--prune'                     // Clean up deleted remote branches
     ], {
       cwd: repoDir,
-      env: safeGitEnv
+      env: safeGitEnv,
     });
     return;
     
@@ -74,7 +74,7 @@ export async function cloneRepo(repoLocation: string) {
   await execFile('git', [
     ...safeGitArgs,
     'clone',
-    '--bare', // Highly recommended for caching
+    '--bare',
     '-c', 'core.sharedRepository=world',
     repoLocation,
     repoDir
@@ -154,7 +154,7 @@ export async function setGitUser({ userHome, uid, gitUsername, gitEmail }: GitUs
 
 interface GitRemoteCommandParams {
   uid: number;
-  action: "ls-remote" | "fetch" | "pull" | "push";
+  action: "ls-remote" | "fetch" | "push";
   remote: string;
   branch?: string;
   cwd: string;
@@ -165,11 +165,16 @@ export async function runGitRemoteCommand({ uid, action, remote, branch, cwd }: 
   if (branch) {
     args.push(branch);
   }
-  return await execFile('git', [...safeGitArgs, ...args], {
+  return await execFile('git', [
+    ...safeGitArgs,
+    '-c', 'core.sharedRepository=group',
+    ...args
+  ], {
     cwd,
     env: {
       ...safeGitEnv,
       SUDO_UID: uid.toString(), // Avoid "dubious ownership" git error
     },
+    gid: uid, // Ensure any new files created (e.g., during fetch) have the correct group ownership
   });
 }

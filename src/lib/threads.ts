@@ -13,6 +13,7 @@ import { getOrCreateThread, getThreadEvents, recordThreadEvent, setCodexThreadId
 import { randomStr } from './utils.js';
 import { SharedThreadEvent } from './thread-events.js';
 import { defaultThreadConfig, redactThreadConfig, ThreadConfig } from './thread-config.js';
+import { setGitUser } from './git.js';
 
 export const AGENTS_GID = parseInt(process.env.AGENTS_GID ?? "");
 if (isNaN(AGENTS_GID)) {
@@ -110,6 +111,9 @@ class Thread extends PubSub<SharedThreadEvent> {
   }
 
   private async _setupWorkspace() {
+    await fs.mkdir(this.threadDir, { recursive: true });
+    await fs.chown(this.threadDir, this._uid, this._uid);
+
     await fs.mkdir(this.workspaceDir, { recursive: true });
     await fs.chown(this.workspaceDir, this._uid, this._uid);
 
@@ -180,6 +184,20 @@ class Thread extends PubSub<SharedThreadEvent> {
 
     const worker = await this._childProcess;
     worker?.send({ type: "config", config });
+
+    if (config.git?.username) {
+      try {
+        await setGitUser({
+          uid: this._uid,
+          userHome: this.threadDir,
+          gitUsername: config.git.username,
+          gitEmail: internalEmail(this.stringId),
+        });
+        console.log(`Applied git user config for thread ${this.id}`);
+      } catch (err) {
+        console.error(`Error applying git user config for thread ${this.id}:`, err);
+      }
+    }
   }
 
   async prompt(message: string, from: string) {
@@ -207,6 +225,10 @@ class Thread extends PubSub<SharedThreadEvent> {
   getEvents(options?: { limit?: number; offset?: number }) {
     return getThreadEvents(this.id, options);
   }
+}
+
+export function internalEmail(stringId: string) {
+  return `${stringId}@agents.internal`;
 }
 
 class Threads {
